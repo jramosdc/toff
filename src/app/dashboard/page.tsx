@@ -119,8 +119,14 @@ export default function DashboardPage() {
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!session?.user?.id) {
+      console.error('User ID not found in session');
+      return;
+    }
+    
     // Rename fields to match expected API parameters
     const requestData = {
+      userId: session.user.id,  // Add the userId from the session
       startDate: newRequest.startDate,
       endDate: newRequest.endDate,
       type: newRequest.type,
@@ -129,21 +135,30 @@ export default function DashboardPage() {
     
     console.log('Submitting request:', requestData);
     
-    const response = await fetch('/api/time-off/requests', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestData),
-    });
-
-    if (response.ok) {
-      setNewRequest({
-        startDate: '',
-        endDate: '',
-        type: 'VACATION',
-        reason: '',
+    try {
+      const response = await fetch('/api/time-off/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData),
       });
-      fetchRequests();
-      fetchBalance();
+
+      if (response.ok) {
+        setNewRequest({
+          startDate: '',
+          endDate: '',
+          type: 'VACATION',
+          reason: '',
+        });
+        fetchRequests();
+        fetchBalance();
+      } else {
+        const errorData = await response.json();
+        console.error('Error submitting time off request:', errorData);
+        alert(`Failed to submit request: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error('Error submitting time off request:', error);
+      alert('An error occurred while submitting your request');
     }
   };
 
@@ -164,6 +179,11 @@ export default function DashboardPage() {
     e.preventDefault();
     setOvertimeError('');
     
+    if (!session?.user?.id) {
+      setOvertimeError('User ID not found in session');
+      return;
+    }
+    
     if (!isLastWeek) {
       setOvertimeError('Overtime requests can only be submitted during the last week of the month');
       return;
@@ -175,10 +195,21 @@ export default function DashboardPage() {
     }
     
     try {
+      // Add userId to the request data
+      const requestData = {
+        ...newOvertimeRequest,
+        userId: session.user.id,
+        requestDate: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format
+        month: new Date().getMonth() + 1, // Current month (1-12)
+        year: new Date().getFullYear(), // Current year
+      };
+      
+      console.log('Submitting overtime request:', requestData);
+      
       const response = await fetch('/api/overtime/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newOvertimeRequest),
+        body: JSON.stringify(requestData),
       });
       
       if (response.ok) {

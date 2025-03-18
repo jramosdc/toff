@@ -77,17 +77,41 @@ export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { userId, startDate, endDate, type, reason } = await req.json();
+    const sessionUserId = session.user.id;
+    const userName = session.user.name || 'User';
+    const userEmail = session.user.email || '';
+    
+    if (!sessionUserId) {
+      return NextResponse.json({ error: "User ID not found in session" }, { status: 400 });
+    }
+
+    // Parse request body
+    const data = await req.json();
+    console.log("Received request data:", data);
+    
+    // Use the userId from the request, or fall back to the session user's ID
+    const userId = data.userId || sessionUserId;
+    const { startDate, endDate, type, reason } = data;
+    
+    // Validate required fields
+    if (!startDate || !endDate || !type) {
+      return NextResponse.json(
+        { error: "Missing required fields (startDate, endDate, type)" }, 
+        { status: 400 }
+      );
+    }
+
     const id = randomUUID();
     
     // Add more debug information
     console.log("DATABASE_URL:", process.env.DATABASE_URL);
     console.log("isPrismaEnabled:", isPrismaEnabled);
     console.log("Prisma client available:", !!prisma);
+    console.log("Using userId:", userId);
     
     // Force use Prisma in Vercel environment
     if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
@@ -111,11 +135,30 @@ export async function POST(req: Request) {
       }
     } else if (db) {
       console.log("Using SQLite to create time off request");
+      console.log("Creating SQLite record with userId:", userId);
       dbOperations.createTimeOffRequest?.run(
         id, userId, startDate, endDate, type, reason
       );
     } else {
       throw new Error("No database connection available");
+    }
+    
+    // Try to send email notification if function exists
+    try {
+      if (typeof sendTimeOffRequestSubmittedEmail === 'function' && userEmail) {
+        await sendTimeOffRequestSubmittedEmail(
+          userEmail,    // to
+          userName,     // userName
+          startDate,    // startDate
+          endDate,      // endDate
+          type,         // type
+          reason        // reason (optional)
+        );
+        console.log("Sent time off request confirmation email to:", userEmail);
+      }
+    } catch (emailError) {
+      console.error("Error sending email notification:", emailError);
+      // Don't fail the request if email fails
     }
     
     return NextResponse.json({ success: true, id });
