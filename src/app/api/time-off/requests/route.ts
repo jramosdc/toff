@@ -85,6 +85,12 @@ export async function POST(req: Request) {
     const userName = session.user.name || 'User';
     const userEmail = session.user.email || '';
     
+    console.log("Session user info:", {
+      id: sessionUserId,
+      email: userEmail, 
+      name: userName
+    });
+    
     if (!sessionUserId) {
       return NextResponse.json({ error: "User ID not found in session" }, { status: 400 });
     }
@@ -94,8 +100,10 @@ export async function POST(req: Request) {
     console.log("Received request data:", data);
     
     // Use the userId from the request, or fall back to the session user's ID
-    const userId = data.userId || sessionUserId;
+    let userId = data.userId || sessionUserId;
     const { startDate, endDate, type, reason } = data;
+    
+    console.log("Will use userId:", userId, "from session:", sessionUserId);
     
     // Validate required fields
     if (!startDate || !endDate || !type) {
@@ -117,22 +125,43 @@ export async function POST(req: Request) {
     if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
       console.log("Using Prisma to create time off request");
       try {
-        // First verify the user exists in the database
-        const userExists = await prisma?.user.findUnique({
-          where: { id: userId }
-        });
+        // First try to look up user by email if we have it
+        let userExists = null;
+        
+        if (userEmail) {
+          console.log("Looking up user by email:", userEmail);
+          userExists = await prisma?.user.findUnique({
+            where: { email: userEmail }
+          });
+          
+          if (userExists) {
+            console.log("Found user by email, updating userId from:", userId, "to:", userExists.id);
+            // Override userId with the one found by email
+            userId = userExists.id;
+          }
+        }
+        
+        // If not found by email, try by ID
+        if (!userExists) {
+          console.log("Looking up user by ID:", userId);
+          userExists = await prisma?.user.findUnique({
+            where: { id: userId }
+          });
+        }
         
         if (!userExists) {
-          console.error(`User with ID ${userId} not found in database`);
+          console.error(`User not found. Tried userId: ${userId} and email: ${userEmail}`);
           return NextResponse.json({
             error: "User not found in database. Please log out and log in again, or contact your administrator."
           }, { status: 404 });
         }
         
+        console.log("Creating time off request for user:", userExists.id, userExists.email);
+        
         await prisma?.timeOffRequest.create({
           data: {
             id,
-            userId,
+            userId: userExists.id, // Use the verified user ID
             startDate: new Date(startDate),
             endDate: new Date(endDate),
             type,
