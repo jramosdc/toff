@@ -4,7 +4,7 @@ import { dbOperations } from '@/lib/db';
 import { randomUUID } from 'crypto';
 import { authOptions } from '@/lib/auth';
 import { sendTimeOffRequestSubmittedEmail } from '@/lib/email';
-import db from '@/lib/db';
+import db, { prisma, isPrismaEnabled } from '@/lib/db';
 
 interface TimeOffBalance {
   vacationDays: number;
@@ -41,101 +41,46 @@ export async function GET() {
   return new NextResponse(JSON.stringify(requests));
 }
 
-export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function POST(req: Request) {
   try {
-    const { startDate, endDate, type, reason } = await request.json();
-
-    if (!startDate || !endDate || !type) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+    const session = await getServerSession(authOptions);
+    
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Validate dates
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      return NextResponse.json(
-        { error: 'Invalid date format' },
-        { status: 400 }
-      );
-    }
-
-    if (start > end) {
-      return NextResponse.json(
-        { error: 'Start date must be before end date' },
-        { status: 400 }
-      );
-    }
+    const { userId, startDate, endDate, type, reason } = await req.json();
+    const id = randomUUID();
     
-    // Create the request
-    const requestId = randomUUID();
-    dbOperations.createTimeOffRequest.run(
-      requestId,
-      session.user.id,
-      startDate,
-      endDate,
-      type,
-      reason || null
-    );
+    console.log("Database mode:", isPrismaEnabled ? "PostgreSQL (Prisma)" : "SQLite");
     
-    // Get the user information for the email
-    const userQuery = `SELECT * FROM users WHERE id = ?`;
-    const user = db.prepare(userQuery).get(session.user.id) as {
-      id: string;
-      email: string;
-      name: string;
-    } | undefined;
-    
-    // Send email notification about the submitted request
-    if (user) {
-      await sendTimeOffRequestSubmittedEmail(
-        user.email,
-        user.name,
-        startDate,
-        endDate,
-        type,
-        reason
-      );
-      
-      // Also notify admins about the new request
-      const adminQuery = `SELECT * FROM users WHERE role = 'ADMIN'`;
-      const admins = db.prepare(adminQuery).all() as {
-        id: string;
-        email: string;
-        name: string;
-      }[];
-      
-      // Send notification to each admin
-      for (const admin of admins) {
-        if (admin.id !== session.user.id) { // Don't notify if the admin is creating their own request
-          await sendTimeOffRequestSubmittedEmail(
-            admin.email,
-            `Admin ${admin.name}`,
-            startDate,
-            endDate,
-            type,
-            `Request from ${user.name}: ${reason || 'No reason provided'}`
-          );
+    // Use Prisma in production (PostgreSQL), SQLite in development
+    if (isPrismaEnabled && prisma) {
+      console.log("Using Prisma to create time off request");
+      await prisma.timeOffRequest.create({
+        data: {
+          id,
+          userId,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          type,
+          status: 'PENDING',
+          reason: reason || null,
         }
-      }
+      });
+    } else if (db) {
+      console.log("Using SQLite to create time off request");
+      dbOperations.createTimeOffRequest.run(
+        id, userId, startDate, endDate, type, reason
+      );
+    } else {
+      throw new Error("No database connection available");
     }
-
-    return NextResponse.json({ id: requestId, status: 'PENDING' });
+    
+    return NextResponse.json({ success: true, id });
   } catch (error) {
-    console.error('Error creating time off request:', error);
-    return NextResponse.json(
-      { error: 'Failed to create time off request' },
-      { status: 500 }
-    );
+    console.error("Error creating time off request:", error);
+    return NextResponse.json({ error: `Error creating time off request: ${error}` }, { status: 500 });
   }
 }
 

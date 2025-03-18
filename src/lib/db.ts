@@ -2,7 +2,6 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { PrismaClient } from '@prisma/client';
 
-
 interface TimeOffBalance {
   id: string;
   user_id: string;
@@ -13,7 +12,7 @@ interface TimeOffBalance {
 }
 
 // Check if we're using Prisma with PostgreSQL
-const isPrismaEnabled = process.env.DATABASE_URL?.includes('postgresql');
+export const isPrismaEnabled = process.env.DATABASE_URL?.includes('postgresql');
 
 // Initialize Prisma if PostgreSQL is configured
 export const prisma = isPrismaEnabled ? new PrismaClient() : null;
