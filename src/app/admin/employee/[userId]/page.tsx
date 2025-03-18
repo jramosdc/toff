@@ -50,7 +50,13 @@ const formatDate = (dateString: string) => {
   }
 };
 
-export default function EmployeeCalendarPage({ params }: { params: { userId: string } }) {
+type PageProps = {
+  params: {
+    userId: string;
+  };
+};
+
+export default function EmployeePage({ params }: PageProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
