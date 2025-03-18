@@ -17,6 +17,7 @@
     "bcryptjs": "^3.0.2",
     "better-sqlite3": "^11.9.0",
     "date-fns": "^4.1.0",
+    "dotenv": "^16.4.7",
     "next": "15.2.2",
     "next-auth": "^4.24.11",
     "nodemailer": "^6.10.0",
