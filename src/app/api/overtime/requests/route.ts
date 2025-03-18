@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { dbOperations } from '@/lib/db';
 import { randomUUID } from 'crypto';
 import { sendOvertimeRequestNotification } from '@/lib/email';
+import db, { prisma, isPrismaEnabled } from '@/lib/db';
 
 interface TimeOffBalance {
   id: string;
@@ -70,7 +71,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { hours, notes } = await request.json();
+    const data = await request.json();
+    const { hours, notes, userId } = data;
+    
+    // Use userId from request or fall back to session user id
+    const userIdToUse = userId || session.user.id;
+
+    if (!userIdToUse) {
+      return NextResponse.json({ error: 'User ID not found' }, { status: 400 });
+    }
 
     // Validate hours
     if (typeof hours !== 'number' || hours <= 0) {
@@ -87,24 +96,84 @@ export async function POST(request: Request) {
 
     const today = new Date();
     const requestId = randomUUID();
+    const month = today.getMonth() + 1; // Month (1-12)
+    const year = today.getFullYear();
+    const requestDate = today.toISOString().split('T')[0];
     
-    // Create overtime request
-    dbOperations.createOvertimeRequest.run(
-      requestId,
-      session.user.id,
-      hours,
-      today.toISOString().split('T')[0],
-      today.getMonth() + 1, // Month (1-12)
-      today.getFullYear(),  // Year
-      notes || null
-    );
+    console.log("DATABASE_URL:", process.env.DATABASE_URL);
+    console.log("isPrismaEnabled:", isPrismaEnabled);
+    console.log("Prisma client available:", !!prisma);
+    console.log("Using userId for overtime request:", userIdToUse);
+    
+    // Use Prisma in production/Vercel environment
+    if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
+      console.log("Using Prisma to create overtime request");
+      try {
+        // First verify the user exists in the database
+        const userExists = await prisma?.user.findUnique({
+          where: { id: userIdToUse }
+        });
+        
+        if (!userExists) {
+          console.error(`User with ID ${userIdToUse} not found in database`);
+          return NextResponse.json({
+            error: "User not found in database. Please log out and log in again, or contact your administrator."
+          }, { status: 404 });
+        }
+        
+        // Create the overtime request with Prisma
+        await prisma?.overtimeRequest.create({
+          data: {
+            id: requestId,
+            userId: userIdToUse,
+            hours,
+            requestDate: new Date(requestDate),
+            month,
+            year,
+            status: 'PENDING',
+            notes: notes || null
+          }
+        });
+        console.log("Successfully created overtime request with Prisma");
+      } catch (prismaError) {
+        console.error("Prisma error:", prismaError);
+        throw prismaError;
+      }
+    } else if (db) {
+      // Fallback to SQLite in development
+      console.log("Using SQLite to create overtime request");
+      dbOperations.createOvertimeRequest.run(
+        requestId,
+        userIdToUse,
+        hours,
+        requestDate,
+        month,
+        year,
+        notes || null
+      );
+    } else {
+      throw new Error("No database connection available");
+    }
 
     // Send email notifications to all admin users
     try {
-      // Get user details for the notification
-      const user = dbOperations.getUserById.get(session.user.id) as User;
+      // Get user details
+      let user;
       
-      // Get all admin users and send them notifications
+      if (process.env.VERCEL || isPrismaEnabled) {
+        user = await prisma?.user.findUnique({
+          where: { id: userIdToUse }
+        });
+      } else {
+        user = dbOperations.getUserById.get(userIdToUse) as User;
+      }
+      
+      if (!user) {
+        console.error("Could not find user for email notification");
+        return NextResponse.json({ id: requestId, status: 'PENDING' }, { status: 201 });
+      }
+      
+      // Get admin email
       const adminEmail = process.env.ADMIN_EMAIL;
       
       if (adminEmail) {
@@ -113,13 +182,30 @@ export async function POST(request: Request) {
           employeeName: user.name,
           employeeEmail: user.email,
           hours,
-          requestDate: today.toISOString().split('T')[0],
+          requestDate,
           notes: notes || undefined,
           adminEmail,
           requestId
         });
+      } else if (process.env.VERCEL || isPrismaEnabled) {
+        // Get admin users with Prisma
+        const adminUsers = await prisma?.user.findMany({
+          where: { role: 'ADMIN' }
+        });
+        
+        for (const admin of adminUsers || []) {
+          await sendOvertimeRequestNotification({
+            employeeName: user.name,
+            employeeEmail: user.email,
+            hours,
+            requestDate,
+            notes: notes || undefined,
+            adminEmail: admin.email,
+            requestId
+          });
+        }
       } else {
-        // Otherwise, notify all admin users in the system
+        // Get admin users with SQLite
         const adminUsers = dbOperations.getAdminUsers.all() as AdminUser[];
         
         for (const admin of adminUsers) {
@@ -127,7 +213,7 @@ export async function POST(request: Request) {
             employeeName: user.name,
             employeeEmail: user.email,
             hours,
-            requestDate: today.toISOString().split('T')[0],
+            requestDate,
             notes: notes || undefined,
             adminEmail: admin.email,
             requestId
@@ -142,6 +228,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ id: requestId, status: 'PENDING' }, { status: 201 });
   } catch (error) {
     console.error('Error creating overtime request:', error);
-    return NextResponse.json({ error: 'Failed to create overtime request' }, { status: 500 });
+    return NextResponse.json({ error: `Failed to create overtime request: ${error}` }, { status: 500 });
   }
 } 

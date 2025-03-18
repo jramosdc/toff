@@ -103,3 +103,54 @@ TOFF can send email notifications for time off requests using Gmail SMTP. To con
 ## License
 
 MIT
+
+## Running locally
+
+1. Clone the repository
+2. Install dependencies with `npm install`
+3. Initialize the database with `npm run init-db`
+4. Start the development server with `npm run dev`
+
+## Deployment Steps
+
+1. Deploy the application to Vercel
+2. Set up environment variables in Vercel:
+   - `DATABASE_URL` - PostgreSQL connection string
+   - `NEXTAUTH_SECRET` - A random string for session encryption
+   - `NEXTAUTH_URL` - Your Vercel deployment URL
+   - `EMAIL_SERVER` - SMTP server details
+   - `EMAIL_FROM` - Sender email address
+
+3. After deployment, you need to seed the database with initial users:
+
+```bash
+# On your local machine with Vercel CLI installed
+vercel env pull .env.production.local
+npm run seed
+```
+
+## Database Seeding
+
+The application includes a script to seed the database with default users including an admin and employees. 
+
+To run the seed script:
+
+```bash
+npm run seed
+```
+
+This will create:
+- Admin user: jmejia@efe.com (password: jmejia)
+- 18 employee accounts with default passwords (the part before @ in their email)
+
+Each user will be initialized with time off balances for the current year:
+- Employees: 22 vacation days, 8 sick days
+- Admin: 25 vacation days, 10 sick days, 5 paid leave days
+
+## Features
+
+- User authentication with NextAuth.js
+- Time off request management
+- Overtime tracking
+- Admin approval workflows
+- Email notifications

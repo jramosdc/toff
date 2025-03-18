@@ -85,13 +85,6 @@ export async function POST(req: Request) {
     const userName = session.user.name || 'User';
     const userEmail = session.user.email || '';
     
-    // Log session info for debugging
-    console.log("Session user data:", {
-      id: sessionUserId,
-      name: userName,
-      email: userEmail
-    });
-    
     if (!sessionUserId) {
       return NextResponse.json({ error: "User ID not found in session" }, { status: 400 });
     }
@@ -103,22 +96,6 @@ export async function POST(req: Request) {
     // Use the userId from the request, or fall back to the session user's ID
     const userId = data.userId || sessionUserId;
     const { startDate, endDate, type, reason } = data;
-    
-    // Add this check to verify user exists in database before creating request
-    if (prisma) {
-      const userExists = await prisma.user.findUnique({
-        where: { id: userId }
-      });
-      
-      if (!userExists) {
-        console.error(`User with ID ${userId} does not exist in the database`);
-        return NextResponse.json({ 
-          error: "User not found in database. Contact administrator." 
-        }, { status: 404 });
-      }
-      
-      console.log("User found in database:", userExists);
-    }
     
     // Validate required fields
     if (!startDate || !endDate || !type) {
@@ -140,6 +117,18 @@ export async function POST(req: Request) {
     if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
       console.log("Using Prisma to create time off request");
       try {
+        // First verify the user exists in the database
+        const userExists = await prisma?.user.findUnique({
+          where: { id: userId }
+        });
+        
+        if (!userExists) {
+          console.error(`User with ID ${userId} not found in database`);
+          return NextResponse.json({
+            error: "User not found in database. Please log out and log in again, or contact your administrator."
+          }, { status: 404 });
+        }
+        
         await prisma?.timeOffRequest.create({
           data: {
             id,
