@@ -54,48 +54,48 @@ model VerificationToken {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  name          String
-  password      String?
-  role          Role           @default(EMPLOYEE)
+  id             String           @id @default(cuid())
+  email          String           @unique
+  name           String
+  password       String?
+  role           Role             @default(EMPLOYEE)
   timeOffBalance TimeOffBalance?
-  requests      TimeOffRequest[]
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
-  emailVerified DateTime?      @map("email_verified")
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
+  requests       TimeOffRequest[]
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  emailVerified  DateTime?        @map("email_verified")
+  image          String?
+  accounts       Account[]
+  sessions       Session[]
 
   @@map("users")
 }
 
 model TimeOffBalance {
-  id            String    @id @default(cuid())
-  userId        String    @unique @map("user_id")
-  user          User      @relation(fields: [userId], references: [id])
-  vacationDays  Int       @default(0) @map("vacation_days")
-  sickDays      Int       @default(0) @map("sick_days")
-  paidLeave     Int       @default(0) @map("paid_leave")
-  year          Int
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id           String   @id @default(cuid())
+  userId       String   @unique @map("user_id")
+  user         User     @relation(fields: [userId], references: [id])
+  vacationDays Int      @default(0) @map("vacation_days")
+  sickDays     Int      @default(0) @map("sick_days")
+  paidLeave    Int      @default(0) @map("paid_leave")
+  year         Int
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("time_off_balance")
 }
 
 model TimeOffRequest {
-  id          String        @id @default(cuid())
-  userId      String        @map("user_id")
-  user        User          @relation(fields: [userId], references: [id])
-  startDate   DateTime      @map("start_date")
-  endDate     DateTime      @map("end_date")
-  type        TimeOffType
-  status      RequestStatus @default(PENDING)
-  reason      String?
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
+  id        String        @id @default(cuid())
+  userId    String        @map("user_id")
+  user      User          @relation(fields: [userId], references: [id])
+  startDate DateTime      @map("start_date")
+  endDate   DateTime      @map("end_date")
+  type      TimeOffType
+  status    RequestStatus @default(PENDING)
+  reason    String?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
 
   @@map("time_off_requests")
 }
