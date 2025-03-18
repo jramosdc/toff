@@ -1,36 +1,105 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TOFF - Time Off Management System
+
+TOFF is a comprehensive time off management system that helps companies track and manage employee vacation days, sick leave, and paid time off.
+
+## Features
+
+- User Authentication (Login/Logout)
+- Role-based access (Admin/Employee)
+- Time Off Balance Management
+- Request Management for Vacation, Sick Days, and Paid Leave
+- Overtime Compensation Requests
+- Admin Dashboard for managing employees and requests
+- Email Notifications for new requests and status changes
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Node.js 18+ 
+- npm or yarn
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Copy the `.env.example` to `.env.local` and update with your configuration:
+   ```
+   cp .env.example .env.local
+   ```
+4. Update the `.env.local` file with your configuration values
+5. Initialize the database:
+   ```
+   node scripts/init-db.js
+   ```
+6. Start the development server:
+   ```
+   npm run dev
+   ```
+7. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+## Email Notifications
+
+The system includes email notifications for:
+- New overtime requests (notifies admins)
+- Request status changes (notifies employees)
+
+By default, the system uses Ethereal Email for testing in development. You'll see preview links in the console logs when emails are sent.
+
+To configure real email sending, update the following variables in your `.env.local` file:
+
+```
+# Admin email for notifications
+ADMIN_EMAIL=your-admin-email@example.com
+
+# Email Configuration
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_username
+SMTP_PASS=your_password
+EMAIL_FROM="TOFF System <notifications@your-domain.com>"
+
+# App URL for email links
+NEXT_PUBLIC_APP_URL=https://your-app-url.com
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Gmail Email Configuration
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+TOFF can send email notifications for time off requests using Gmail SMTP. To configure email functionality:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Create an App Password in your Google Account**:
+   - Go to your Google Account → Security → 2-Step Verification → App passwords
+   - Create a new app password for "TOFF Application"
+   - Copy the generated password
 
-## Learn More
+2. **Update your `.env.local` file with the following variables**:
+   ```
+   EMAIL_SERVER_HOST=smtp.gmail.com
+   EMAIL_SERVER_PORT=587
+   EMAIL_SERVER_USER=your-gmail-address@gmail.com
+   EMAIL_SERVER_PASSWORD=your-app-password-from-step-1
+   EMAIL_FROM=your-gmail-address@gmail.com
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+3. **Email notifications are sent for**:
+   - Time off request submission (to employee and administrators)
+   - Time off request approval (to employee)
+   - Time off request rejection (to employee)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Important Notes
+- Gmail has daily sending limits for regular accounts (around 500 emails/day)
+- For production use with high volume, consider using a dedicated email service like SendGrid, Mailgun, etc.
+- If you're getting authentication errors, make sure 2FA is enabled and you're using an App Password, not your regular Gmail password
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Troubleshooting
+- If emails aren't sending, check your Gmail account for security alerts
+- Ensure the port 587 isn't blocked by your firewall or network
+- For debugging, check server logs for SMTP connection errors
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT

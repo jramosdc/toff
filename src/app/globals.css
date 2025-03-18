@@ -24,3 +24,30 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Make gray text darker for better readability */
+.text-gray-400 {
+  color: #686868 !important; /* Darker than default gray-400 */
+}
+
+.text-gray-500 {
+  color: #505050 !important; /* Darker than default gray-500 */
+}
+
+.text-gray-600 {
+  color: #3d3d3d !important; /* Darker than default gray-600 */
+}
+
+.text-gray-700 {
+  color: #2d2d2d !important; /* Darker than default gray-700 */
+}
+
+/* Handle placeholders */
+.placeholder-gray-500::placeholder {
+  color: #505050 !important; /* Darker placeholder text */
+}
+
+/* Text in form elements also needs to be darker */
+input, select, textarea {
+  color: #171717 !important;
+}
