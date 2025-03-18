@@ -11,14 +11,14 @@ interface TimeOffBalance {
   year: number;
 }
 
-// Check if we're using Prisma with PostgreSQL
-export const isPrismaEnabled = process.env.DATABASE_URL?.includes('postgresql');
+// Check if we're using Prisma with PostgreSQL or running on Vercel
+export const isPrismaEnabled = process.env.VERCEL || process.env.DATABASE_URL?.includes('postgresql');
 
-// Initialize Prisma if PostgreSQL is configured
+// Initialize Prisma if PostgreSQL is configured or on Vercel
 export const prisma = isPrismaEnabled ? new PrismaClient() : null;
 
-// Initialize SQLite only if not using Prisma
-const db = !isPrismaEnabled 
+// Initialize SQLite only if not using Prisma and not on Vercel
+const db = (!isPrismaEnabled && !process.env.VERCEL) 
   ? new Database(join(process.cwd(), 'toff.db'), { verbose: console.log })
   : null;
 

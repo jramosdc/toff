@@ -21,7 +21,7 @@ export async function GET() {
     });
   }
 
-  console.log('Session user in requests GET:', session.user); // Debug log
+  console.log('Session user in requests GET:', session.user);
 
   const userId = session.user.id;
   const userRole = session.user.role;
@@ -32,13 +32,45 @@ export async function GET() {
     });
   }
   
-  const requests = userRole === 'ADMIN'
-    ? dbOperations.getTimeOffRequests.all('PENDING')
-    : dbOperations.getUserTimeOffRequests.all(userId);
-
-  console.log('Time off requests from DB:', JSON.stringify(requests, null, 2));
-  
-  return new NextResponse(JSON.stringify(requests));
+  try {
+    let requests;
+    
+    // Use Prisma in production/Vercel environment
+    if (process.env.VERCEL || isPrismaEnabled) {
+      console.log("Using Prisma to fetch time off requests");
+      if (userRole === 'ADMIN') {
+        requests = await prisma?.timeOffRequest.findMany({
+          where: { status: 'PENDING' },
+          include: { user: { select: { name: true } } }
+        });
+        // Transform to match the expected format
+        requests = requests?.map(req => ({
+          ...req,
+          user_name: req.user.name
+        }));
+      } else {
+        requests = await prisma?.timeOffRequest.findMany({
+          where: { userId }
+        });
+      }
+    } else if (db) {
+      console.log("Using SQLite to fetch time off requests");
+      // SQLite fallback for development
+      requests = userRole === 'ADMIN'
+        ? dbOperations.getTimeOffRequests?.all('PENDING')
+        : dbOperations.getUserTimeOffRequests?.all(userId);
+    } else {
+      throw new Error("No database connection available");
+    }
+    
+    console.log('Time off requests from DB:', JSON.stringify(requests || [], null, 2));
+    return new NextResponse(JSON.stringify(requests || []));
+  } catch (error) {
+    console.error("Error fetching time off requests:", error);
+    return new NextResponse(JSON.stringify({ error: `Error fetching requests: ${error}` }), {
+      status: 500,
+    });
+  }
 }
 
 export async function POST(req: Request) {
@@ -52,25 +84,34 @@ export async function POST(req: Request) {
     const { userId, startDate, endDate, type, reason } = await req.json();
     const id = randomUUID();
     
-    console.log("Database mode:", isPrismaEnabled ? "PostgreSQL (Prisma)" : "SQLite");
+    // Add more debug information
+    console.log("DATABASE_URL:", process.env.DATABASE_URL);
+    console.log("isPrismaEnabled:", isPrismaEnabled);
+    console.log("Prisma client available:", !!prisma);
     
-    // Use Prisma in production (PostgreSQL), SQLite in development
-    if (isPrismaEnabled && prisma) {
+    // Force use Prisma in Vercel environment
+    if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
       console.log("Using Prisma to create time off request");
-      await prisma.timeOffRequest.create({
-        data: {
-          id,
-          userId,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-          type,
-          status: 'PENDING',
-          reason: reason || null,
-        }
-      });
+      try {
+        await prisma?.timeOffRequest.create({
+          data: {
+            id,
+            userId,
+            startDate: new Date(startDate),
+            endDate: new Date(endDate),
+            type,
+            status: 'PENDING',
+            reason: reason || null,
+          }
+        });
+        console.log("Successfully created time off request with Prisma");
+      } catch (prismaError) {
+        console.error("Prisma error:", prismaError);
+        throw prismaError;
+      }
     } else if (db) {
       console.log("Using SQLite to create time off request");
-      dbOperations.createTimeOffRequest.run(
+      dbOperations.createTimeOffRequest?.run(
         id, userId, startDate, endDate, type, reason
       );
     } else {
