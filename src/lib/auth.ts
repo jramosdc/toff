@@ -2,7 +2,7 @@ import { AuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import EmailProvider from 'next-auth/providers/email';
 import bcrypt from 'bcryptjs';
-import { dbOperations } from './db';
+import db, { dbOperations, prisma, isPrismaEnabled } from './db';
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { PrismaClient } from '@prisma/client';
 
@@ -15,10 +15,8 @@ interface User {
   role: string;
 }
 
-const prisma = new PrismaClient();
-
 export const authOptions: AuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter: prisma ? PrismaAdapter(prisma) : undefined,
   providers: [
     EmailProvider({
       server: {
@@ -42,18 +40,42 @@ export const authOptions: AuthOptions = {
           throw new Error('Please enter an email and password');
         }
 
-        const user = dbOperations.getUserByEmail.get(credentials.email) as User | undefined;
+        console.log("Authenticating user:", credentials.email);
+        console.log("DATABASE_URL:", process.env.DATABASE_URL);
+        console.log("isPrismaEnabled:", isPrismaEnabled);
+        console.log("Prisma client available:", !!prisma);
+        console.log("VERCEL:", process.env.VERCEL);
+        
+        let user;
+        
+        // Use Prisma in production
+        if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
+          console.log("Using Prisma for authentication");
+          user = await prisma?.user.findUnique({
+            where: { email: credentials.email }
+          });
+        } else if (db && dbOperations.getUserByEmail) {
+          console.log("Using SQLite for authentication");
+          user = dbOperations.getUserByEmail.get(credentials.email) as User | undefined;
+        } else {
+          console.error("No database connection available");
+          throw new Error('Database connection error');
+        }
 
-        if (!user) {
+        if (!user || !user.password) {
+          console.log("No user found with email:", credentials.email);
           throw new Error('No user found with that email');
         }
 
+        console.log("User found, checking password");
         const passwordMatch = await bcrypt.compare(credentials.password, user.password);
 
         if (!passwordMatch) {
+          console.log("Password doesn't match");
           throw new Error('Incorrect password');
         }
 
+        console.log("Authentication successful for:", user.email);
         return {
           id: user.id,
           email: user.email,
