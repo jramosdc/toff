@@ -6,14 +6,10 @@
  * - To test employee notification: node scripts/test-email.js employee your@email.com "Employee Name"
  */
 
+// Import required packages
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config({ path: '.env.local' });
-
-const { 
-  sendTimeOffRequestSubmittedEmail,
-  sendTimeOffRequestAdminNotification,
-  sendTimeOffRequestApprovedEmail,
-  sendTimeOffRequestRejectedEmail
-} = require('../src/lib/email');
 
 // Debug info
 console.log('Email Configuration:');
@@ -43,6 +39,162 @@ const employeeName = args[2] || 'Test Employee'; // Name to use in the email
 if (!notificationType || !emailTo) {
   console.error('Usage: node scripts/test-email.js [admin|employee|approved|rejected] your@email.com "Employee Name"');
   process.exit(1);
+}
+
+// Direct implementation of nodemailer for testing
+const nodemailer = require('nodemailer');
+
+// Create the transporter with the email server config
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_SERVER_HOST,
+  port: parseInt(process.env.EMAIL_SERVER_PORT || '587'),
+  secure: parseInt(process.env.EMAIL_SERVER_PORT || '587') === 465,
+  auth: {
+    user: process.env.EMAIL_SERVER_USER,
+    pass: process.env.EMAIL_SERVER_PASSWORD,
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
+});
+
+// Simplified email sending function
+async function sendEmail({ to, subject, html }) {
+  console.log(`Sending email to: ${to}`);
+  console.log(`Subject: ${subject}`);
+  
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER,
+      to,
+      subject,
+      html,
+    });
+    
+    console.log('Email sent:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Failed to send email:', error);
+    throw error;
+  }
+}
+
+// Email template functions
+async function sendTimeOffRequestSubmittedEmail(
+  to, 
+  userName, 
+  startDate, 
+  endDate,
+  type,
+  reason
+) {
+  const subject = `Time Off Request Submitted`;
+  
+  const html = `
+    <h1>Time Off Request Submitted</h1>
+    <p>Hello ${userName},</p>
+    <p>Your time off request has been submitted and is awaiting approval.</p>
+    <p><strong>Type:</strong> ${type}</p>
+    <p><strong>Start Date:</strong> ${new Date(startDate).toLocaleDateString()}</p>
+    <p><strong>End Date:</strong> ${new Date(endDate).toLocaleDateString()}</p>
+    ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+    <p>You will be notified when your request is processed.</p>
+    <p>Best regards,<br>TOFF Team</p>
+  `;
+  
+  return await sendEmail({ to, subject, html });
+}
+
+async function sendTimeOffRequestAdminNotification(
+  adminEmail,
+  employeeName,
+  startDate,
+  endDate,
+  type,
+  requestId,
+  reason
+) {
+  const subject = `[TOFF] New Time Off Request from ${employeeName}`;
+  
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const approvalLink = `${appUrl}/admin/requests?request=${requestId}`;
+  
+  const html = `
+    <h2>New Time Off Request</h2>
+    <p>A new time off request has been submitted and requires your attention.</p>
+    
+    <h3>Request Details:</h3>
+    <ul>
+      <li><strong>Employee:</strong> ${employeeName}</li>
+      <li><strong>Type:</strong> ${type}</li>
+      <li><strong>Start Date:</strong> ${new Date(startDate).toLocaleDateString()}</li>
+      <li><strong>End Date:</strong> ${new Date(endDate).toLocaleDateString()}</li>
+      ${reason ? `<li><strong>Reason:</strong> ${reason}</li>` : ''}
+    </ul>
+    
+    <p>
+      <a href="${approvalLink}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">
+        Review Request
+      </a>
+    </p>
+    
+    <p>Or copy this URL into your browser: ${approvalLink}</p>
+    
+    <hr>
+    <p style="color: #6b7280; font-size: 0.875rem;">
+      This is an automated message from the TOFF (Time Off) system.
+    </p>
+  `;
+  
+  return await sendEmail({ to: adminEmail, subject, html });
+}
+
+async function sendTimeOffRequestApprovedEmail(
+  to,
+  userName,
+  startDate,
+  endDate,
+  type
+) {
+  const subject = `Time Off Request Approved`;
+  
+  const html = `
+    <h1>Time Off Request Approved</h1>
+    <p>Hello ${userName},</p>
+    <p>Your time off request has been approved!</p>
+    <p><strong>Type:</strong> ${type}</p>
+    <p><strong>Start Date:</strong> ${new Date(startDate).toLocaleDateString()}</p>
+    <p><strong>End Date:</strong> ${new Date(endDate).toLocaleDateString()}</p>
+    <p>Enjoy your time off!</p>
+    <p>Best regards,<br>TOFF Team</p>
+  `;
+  
+  return await sendEmail({ to, subject, html });
+}
+
+async function sendTimeOffRequestRejectedEmail(
+  to,
+  userName,
+  startDate,
+  endDate,
+  type,
+  rejectionReason
+) {
+  const subject = `Time Off Request Status Update`;
+  
+  const html = `
+    <h1>Time Off Request Not Approved</h1>
+    <p>Hello ${userName},</p>
+    <p>Unfortunately, your time off request could not be approved at this time.</p>
+    <p><strong>Type:</strong> ${type}</p>
+    <p><strong>Start Date:</strong> ${new Date(startDate).toLocaleDateString()}</p>
+    <p><strong>End Date:</strong> ${new Date(endDate).toLocaleDateString()}</p>
+    ${rejectionReason ? `<p><strong>Reason:</strong> ${rejectionReason}</p>` : ''}
+    <p>If you have any questions, please contact your manager.</p>
+    <p>Best regards,<br>TOFF Team</p>
+  `;
+  
+  return await sendEmail({ to, subject, html });
 }
 
 async function runTest() {
