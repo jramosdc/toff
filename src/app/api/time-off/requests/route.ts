@@ -41,17 +41,36 @@ export async function GET() {
       if (userRole === 'ADMIN') {
         requests = await prisma?.timeOffRequest.findMany({
           where: { status: 'PENDING' },
-          include: { user: { select: { name: true } } }
+          include: { user: { select: { name: true, email: true } } }
         });
+        
         // Transform to match the expected format
         requests = requests?.map(req => ({
-          ...req,
-          user_name: req.user.name
+          id: req.id,
+          user_id: req.userId,
+          start_date: req.startDate.toISOString(),
+          end_date: req.endDate.toISOString(),
+          type: req.type,
+          status: req.status,
+          reason: req.reason,
+          user_name: req.user.name,
+          user_email: req.user.email
         }));
       } else {
-        requests = await prisma?.timeOffRequest.findMany({
+        const userRequests = await prisma?.timeOffRequest.findMany({
           where: { userId }
         });
+        
+        // Transform to match the expected format
+        requests = userRequests?.map(req => ({
+          id: req.id,
+          user_id: req.userId,
+          start_date: req.startDate.toISOString(),
+          end_date: req.endDate.toISOString(),
+          type: req.type,
+          status: req.status,
+          reason: req.reason
+        }));
       }
     } else if (db) {
       console.log("Using SQLite to fetch time off requests");

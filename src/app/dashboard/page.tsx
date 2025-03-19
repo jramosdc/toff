@@ -37,12 +37,23 @@ interface OvertimeRequest {
 const formatDate = (dateString: string) => {
   try {
     console.log('Formatting date:', dateString);
-    const date = new Date(dateString);
+    if (!dateString) return 'Invalid Date';
+    
+    // Handle ISO string format from Prisma
+    let date;
+    if (typeof dateString === 'string') {
+      // Try to parse as ISO string first
+      date = new Date(dateString);
+    } else {
+      date = new Date(dateString);
+    }
+    
     // Check if date is valid
     if (isNaN(date.getTime())) {
       console.error('Invalid date:', dateString);
       return 'Invalid Date';
     }
+    
     return date.toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'short',
