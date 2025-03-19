@@ -216,7 +216,7 @@ export default function EmployeePage({ params }: PageProps) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">Employee Details</h3>
-                  <div className="mt-2">
+                  <div className="mt-2 text-gray-800">
                     <p><span className="font-medium">Name:</span> {user.name}</p>
                     <p><span className="font-medium">Email:</span> {user.email}</p>
                     <p><span className="font-medium">Role:</span> {user.role}</p>
@@ -224,7 +224,7 @@ export default function EmployeePage({ params }: PageProps) {
                 </div>
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">Time Off Balance ({year})</h3>
-                  <div className="mt-2">
+                  <div className="mt-2 text-gray-800">
                     <p><span className="font-medium">Vacation Days:</span> {balance.vacationDays} days</p>
                     <p><span className="font-medium">Sick Days:</span> {balance.sickDays} days</p>
                     <p><span className="font-medium">Paid Leave:</span> {balance.paidLeave} days</p>
@@ -232,7 +232,7 @@ export default function EmployeePage({ params }: PageProps) {
                 </div>
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">Legend</h3>
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-2 space-y-2 text-gray-800">
                     <div className="flex items-center">
                       <div className="w-4 h-4 bg-blue-100 border border-blue-300 rounded mr-2"></div>
                       <span>Vacation</span>
@@ -262,13 +262,13 @@ export default function EmployeePage({ params }: PageProps) {
               <div className="flex space-x-2">
                 <button 
                   onClick={prevMonth}
-                  className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                  className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400 text-gray-800"
                 >
                   Previous
                 </button>
                 <button 
                   onClick={nextMonth}
-                  className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                  className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400 text-gray-800"
                 >
                   Next
                 </button>
@@ -277,7 +277,7 @@ export default function EmployeePage({ params }: PageProps) {
             
             <div className="grid grid-cols-7 gap-1">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                <div key={day} className="text-center font-medium py-2 bg-gray-50">
+                <div key={day} className="text-center font-medium py-2 bg-gray-200 text-gray-800">
                   {day}
                 </div>
               ))}
@@ -296,12 +296,12 @@ export default function EmployeePage({ params }: PageProps) {
                   <div 
                     key={day.toString()} 
                     className={`border p-2 min-h-[80px] ${
-                      isWeekend(day) ? 'bg-gray-50' : 'bg-white'
+                      isWeekend(day) ? 'bg-gray-200' : 'bg-white'
                     } ${typeColor}`}
                   >
-                    <div className="font-medium">{format(day, 'd')}</div>
+                    <div className="font-medium text-gray-800">{format(day, 'd')}</div>
                     {dayOff && (
-                      <div className="text-xs mt-1">
+                      <div className="text-xs mt-1 font-medium">
                         {dayOff.replace('_', ' ')}
                       </div>
                     )}
@@ -320,7 +320,7 @@ export default function EmployeePage({ params }: PageProps) {
             </h2>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Type
@@ -340,10 +340,10 @@ export default function EmployeePage({ params }: PageProps) {
                   {requests.length > 0 ? (
                     requests.map((request) => (
                       <tr key={request.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">
                           {request.type.replace('_', ' ')}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                           {formatDate(request.start_date)} - {formatDate(request.end_date)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -359,14 +359,14 @@ export default function EmployeePage({ params }: PageProps) {
                             {request.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                           {request.reason || '-'}
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+                      <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-700 font-medium">
                         No time off requests found.
                       </td>
                     </tr>
