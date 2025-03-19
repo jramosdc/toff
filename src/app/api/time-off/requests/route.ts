@@ -186,19 +186,20 @@ export async function POST(req: NextRequest) {
       throw new Error("No database connection available");
     }
     
-    // Try to send email notification to user
+    // Try to send email notification to admin(s) only, not to the employee
     try {
-      if (typeof sendTimeOffRequestSubmittedEmail === 'function' && userEmail) {
-        await sendTimeOffRequestSubmittedEmail(
-          userEmail,    // to
-          userName,     // userName
-          startDate,    // startDate
-          endDate,      // endDate
-          type,         // type
-          reason        // reason (optional)
-        );
-        debug("Sent time off request confirmation email to user:", userEmail);
-      }
+      // Remove the email to employee
+      // if (typeof sendTimeOffRequestSubmittedEmail === 'function' && userEmail) {
+      //   await sendTimeOffRequestSubmittedEmail(
+      //     userEmail,    // to
+      //     userName,     // userName
+      //     startDate,    // startDate
+      //     endDate,      // endDate
+      //     type,         // type
+      //     reason        // reason (optional)
+      //   );
+      //   debug("Sent time off request confirmation email to user:", userEmail);
+      // }
       
       // Send notification to admin(s)
       if (process.env.VERCEL || isPrismaEnabled) {
