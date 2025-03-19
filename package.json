@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "seed": "node scripts/seed-db.js"
+    "seed": "node scripts/seed-db.js",
+    "reset-time-off": "node scripts/reset-time-off-data.js"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
