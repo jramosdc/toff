@@ -4,6 +4,22 @@ import { authOptions } from '@/lib/auth';
 import db, { prisma, isPrismaEnabled } from '@/lib/db';
 import { sendTimeOffRequestApprovedEmail, sendTimeOffRequestRejectedEmail } from '@/lib/email';
 
+// Helper function to calculate working days between two dates (excluding weekends)
+function calculateWorkingDays(start: Date, end: Date) {
+  let count = 0;
+  const current = new Date(start);
+
+  while (current <= end) {
+    const dayOfWeek = current.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  return count;
+}
+
 // Get a specific time off request
 export async function GET(
   request: Request,
@@ -137,6 +153,94 @@ export async function PATCH(
           { status: 403 }
         );
       }
+
+      // Process approval - only update balance if we're changing from PENDING to APPROVED
+      if (status === 'APPROVED' && existingRequest.status !== 'APPROVED') {
+        console.log("Approving time off request - updating balance");
+        const currentYear = new Date().getFullYear();
+        
+        // Get the user's current time off balance
+        const userBalance = await prisma?.timeOffBalance.findFirst({
+          where: {
+            userId: existingRequest.userId,
+            year: currentYear
+          }
+        });
+        
+        if (!userBalance) {
+          return NextResponse.json(
+            { error: 'User time off balance not found' },
+            { status: 404 }
+          );
+        }
+        
+        // Calculate the number of days for this time off request
+        const startDate = new Date(existingRequest.startDate);
+        const endDate = new Date(existingRequest.endDate);
+        const daysRequested = calculateWorkingDays(startDate, endDate);
+        
+        console.log("Request from", startDate, "to", endDate, "equals", daysRequested, "working days");
+        
+        // Determine which balance to update based on request type
+        let updatedBalance;
+        
+        if (existingRequest.type === 'VACATION') {
+          // Check if user has enough vacation days
+          if (userBalance.vacationDays < daysRequested) {
+            return NextResponse.json(
+              { error: 'Not enough vacation days available' },
+              { status: 400 }
+            );
+          }
+          
+          // Deduct from vacation balance
+          updatedBalance = await prisma?.timeOffBalance.update({
+            where: { id: userBalance.id },
+            data: { 
+              vacationDays: userBalance.vacationDays - daysRequested 
+            }
+          });
+          console.log(`Deducted ${daysRequested} vacation days from balance`);
+          
+        } else if (existingRequest.type === 'SICK') {
+          // Check if user has enough sick days
+          if (userBalance.sickDays < daysRequested) {
+            return NextResponse.json(
+              { error: 'Not enough sick days available' },
+              { status: 400 }
+            );
+          }
+          
+          // Deduct from sick days balance
+          updatedBalance = await prisma?.timeOffBalance.update({
+            where: { id: userBalance.id },
+            data: { 
+              sickDays: userBalance.sickDays - daysRequested 
+            }
+          });
+          console.log(`Deducted ${daysRequested} sick days from balance`);
+          
+        } else if (existingRequest.type === 'PAID_LEAVE') {
+          // Check if user has enough paid leave
+          if (userBalance.paidLeave < daysRequested) {
+            return NextResponse.json(
+              { error: 'Not enough paid leave days available' },
+              { status: 400 }
+            );
+          }
+          
+          // Deduct from paid leave balance
+          updatedBalance = await prisma?.timeOffBalance.update({
+            where: { id: userBalance.id },
+            data: { 
+              paidLeave: userBalance.paidLeave - daysRequested 
+            }
+          });
+          console.log(`Deducted ${daysRequested} paid leave days from balance`);
+        }
+        
+        console.log("Updated balance:", updatedBalance);
+      }
       
       // Update the request status
       const updatedRequest = await prisma?.timeOffRequest.update({
@@ -212,6 +316,85 @@ export async function PATCH(
           { error: 'Unauthorized to update this request' },
           { status: 403 }
         );
+      }
+
+      // Process approval - update balance if changing to approved
+      if (status === 'APPROVED' && existingRequest.status !== 'APPROVED') {
+        console.log("Approving time off request - updating balance");
+        const currentYear = new Date().getFullYear();
+        
+        // Get the user's current time off balance
+        const userBalance = db.prepare(
+          'SELECT * FROM time_off_balances WHERE user_id = ? AND year = ?'
+        ).get(existingRequest.user_id, currentYear) as {
+          id: string;
+          user_id: string;
+          vacation_days: number;
+          sick_days: number;
+          paid_leave: number;
+          year: number;
+        } | undefined;
+        
+        if (!userBalance) {
+          return NextResponse.json(
+            { error: 'User time off balance not found' },
+            { status: 404 }
+          );
+        }
+        
+        // Calculate the number of days for this time off request
+        const startDate = new Date(existingRequest.start_date);
+        const endDate = new Date(existingRequest.end_date);
+        const daysRequested = calculateWorkingDays(startDate, endDate);
+        
+        console.log("Request from", startDate, "to", endDate, "equals", daysRequested, "working days");
+        
+        // Update the appropriate balance based on request type
+        if (existingRequest.type === 'VACATION') {
+          // Check if user has enough vacation days
+          if (userBalance.vacation_days < daysRequested) {
+            return NextResponse.json(
+              { error: 'Not enough vacation days available' },
+              { status: 400 }
+            );
+          }
+          
+          // Deduct from vacation balance
+          db.prepare(
+            'UPDATE time_off_balances SET vacation_days = vacation_days - ? WHERE id = ?'
+          ).run(daysRequested, userBalance.id);
+          console.log(`Deducted ${daysRequested} vacation days from balance`);
+          
+        } else if (existingRequest.type === 'SICK') {
+          // Check if user has enough sick days
+          if (userBalance.sick_days < daysRequested) {
+            return NextResponse.json(
+              { error: 'Not enough sick days available' },
+              { status: 400 }
+            );
+          }
+          
+          // Deduct from sick days balance
+          db.prepare(
+            'UPDATE time_off_balances SET sick_days = sick_days - ? WHERE id = ?'
+          ).run(daysRequested, userBalance.id);
+          console.log(`Deducted ${daysRequested} sick days from balance`);
+          
+        } else if (existingRequest.type === 'PAID_LEAVE') {
+          // Check if user has enough paid leave
+          if (userBalance.paid_leave < daysRequested) {
+            return NextResponse.json(
+              { error: 'Not enough paid leave days available' },
+              { status: 400 }
+            );
+          }
+          
+          // Deduct from paid leave balance
+          db.prepare(
+            'UPDATE time_off_balances SET paid_leave = paid_leave - ? WHERE id = ?'
+          ).run(daysRequested, userBalance.id);
+          console.log(`Deducted ${daysRequested} paid leave days from balance`);
+        }
       }
 
       // Update the request status
