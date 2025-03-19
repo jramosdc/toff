@@ -9,19 +9,37 @@ let transporter: nodemailer.Transporter;
 export async function initializeEmailTransporter() {
   if (transporter) return transporter;
   
-  // Create a test account for development
-  const testAccount = await nodemailer.createTestAccount();
-  
-  // Create reusable transporter
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-    port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587,
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER || testAccount.user,
-      pass: process.env.SMTP_PASS || testAccount.pass,
-    },
-  });
+  // Use environment variables for email configuration
+  // If running on Vercel, don't use localhost SMTP
+  if (process.env.VERCEL) {
+    // For production, use proper SMTP configuration with authentication
+    transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_SERVER_HOST,
+      port: process.env.EMAIL_SERVER_PORT ? parseInt(process.env.EMAIL_SERVER_PORT) : 587,
+      secure: false, // true for 465, false for other ports
+      auth: {
+        user: process.env.EMAIL_SERVER_USER,
+        pass: process.env.EMAIL_SERVER_PASSWORD,
+      },
+    });
+    
+    console.log('Email transporter configured for production with host:', process.env.EMAIL_SERVER_HOST);
+  } else {
+    // For development, use Ethereal test account
+    const testAccount = await nodemailer.createTestAccount();
+    
+    transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+    
+    console.log('Email transporter configured for development with Ethereal');
+  }
   
   return transporter;
 }
@@ -46,11 +64,14 @@ export async function sendNotificationEmail({
       html,
     };
     
+    console.log('Sending email to:', to, 'with subject:', subject);
     const info = await emailTransporter.sendMail(mailOptions);
     
     // For development, log the URL where you can preview the email
-    if (!process.env.SMTP_HOST) {
+    if (!process.env.VERCEL) {
       console.log('Email preview URL: %s', nodemailer.getTestMessageUrl(info));
+    } else {
+      console.log('Email sent successfully in production:', info.messageId);
     }
     
     return info;
@@ -163,23 +184,45 @@ interface EmailPayload {
   html: string;
 }
 
-const smtpOptions = {
-  host: process.env.EMAIL_SERVER_HOST,
-  port: Number(process.env.EMAIL_SERVER_PORT),
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_SERVER_USER || '',
-    pass: process.env.EMAIL_SERVER_PASSWORD || '',
-  },
-};
-
+// Helper to send email with custom transporter options
 export const sendEmail = async (data: EmailPayload) => {
-  const transporter = nodemailer.createTransport(smtpOptions);
-  
-  return await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    ...data,
-  });
+  try {
+    // In production, always use the configured transporter
+    if (process.env.VERCEL) {
+      const emailTransporter = await initializeEmailTransporter();
+      
+      console.log('Sending email to:', data.to, 'with subject:', data.subject);
+      const info = await emailTransporter.sendMail({
+        from: process.env.EMAIL_FROM || '"TOFF System" <notifications@toff.app>',
+        ...data,
+      });
+      
+      console.log('Email sent successfully:', info.messageId);
+      return info;
+    } else {
+      // For development, use local SMTP options
+      const transporter = nodemailer.createTransport({
+        host: process.env.EMAIL_SERVER_HOST || 'smtp.ethereal.email',
+        port: Number(process.env.EMAIL_SERVER_PORT) || 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_SERVER_USER,
+          pass: process.env.EMAIL_SERVER_PASSWORD,
+        },
+      });
+      
+      const info = await transporter.sendMail({
+        from: process.env.EMAIL_FROM || '"TOFF System" <notifications@toff.app>',
+        ...data,
+      });
+      
+      console.log('Email preview URL: %s', nodemailer.getTestMessageUrl(info));
+      return info;
+    }
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw error;
+  }
 };
 
 export const sendTimeOffRequestApprovedEmail = async (
