@@ -253,4 +253,49 @@ export const sendTimeOffRequestSubmittedEmail = async (
   `;
   
   return await sendEmail({ to, subject, html });
+};
+
+// Adding new function for admin notification
+export const sendTimeOffRequestAdminNotification = async (
+  adminEmail: string,
+  employeeName: string,
+  startDate: string,
+  endDate: string,
+  type: string,
+  requestId: string,
+  reason?: string
+) => {
+  const subject = `[TOFF] New Time Off Request from ${employeeName}`;
+  
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const approvalLink = `${appUrl}/admin/requests?request=${requestId}`;
+  
+  const html = `
+    <h2>New Time Off Request</h2>
+    <p>A new time off request has been submitted and requires your attention.</p>
+    
+    <h3>Request Details:</h3>
+    <ul>
+      <li><strong>Employee:</strong> ${employeeName}</li>
+      <li><strong>Type:</strong> ${type}</li>
+      <li><strong>Start Date:</strong> ${new Date(startDate).toLocaleDateString()}</li>
+      <li><strong>End Date:</strong> ${new Date(endDate).toLocaleDateString()}</li>
+      ${reason ? `<li><strong>Reason:</strong> ${reason}</li>` : ''}
+    </ul>
+    
+    <p>
+      <a href="${approvalLink}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">
+        Review Request
+      </a>
+    </p>
+    
+    <p>Or copy this URL into your browser: ${approvalLink}</p>
+    
+    <hr>
+    <p style="color: #6b7280; font-size: 0.875rem;">
+      This is an automated message from the TOFF (Time Off) system.
+    </p>
+  `;
+  
+  return await sendEmail({ to: adminEmail, subject, html });
 }; 

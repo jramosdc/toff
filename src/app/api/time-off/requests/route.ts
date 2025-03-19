@@ -1,10 +1,14 @@
-import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { dbOperations } from '@/lib/db';
+import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { authOptions } from '@/lib/auth';
-import { sendTimeOffRequestSubmittedEmail } from '@/lib/email';
+import { 
+  sendTimeOffRequestSubmittedEmail, 
+  sendTimeOffRequestAdminNotification 
+} from '@/lib/email';
 import db, { prisma, isPrismaEnabled } from '@/lib/db';
+import { v4 as uuidv4 } from 'uuid';
+import Debug from 'debug';
 
 interface TimeOffBalance {
   vacationDays: number;
@@ -92,118 +96,97 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const debug = Debug('toff:api:time-off:requests:post');
+    debug('POST request received');
     
+    // Get session and verify authentication
+    const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      debug('No session found or user not authenticated');
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
-
-    const sessionUserId = session.user.id;
+    
+    // Get user info for notifications
+    const userId = session.user.id;
     const userName = session.user.name || 'User';
     const userEmail = session.user.email || '';
+    debug('Session user:', { userId, userName, userEmail });
     
-    console.log("Session user info:", {
-      id: sessionUserId,
-      email: userEmail, 
-      name: userName
-    });
-    
-    if (!sessionUserId) {
-      return NextResponse.json({ error: "User ID not found in session" }, { status: 400 });
-    }
-
     // Parse request body
-    const data = await req.json();
-    console.log("Received request data:", data);
+    const body = await req.json();
+    debug('Request body:', body);
     
-    // Use the userId from the request, or fall back to the session user's ID
-    let userId = data.userId || sessionUserId;
-    const { startDate, endDate, type, reason } = data;
+    const {
+      userId: requestUserId,
+      startDate,
+      endDate,
+      type,
+      reason
+    } = body;
     
-    console.log("Will use userId:", userId, "from session:", sessionUserId);
+    // Use provided userId or fall back to session user id
+    const effectiveUserId = requestUserId || userId;
+    debug('Effective userId:', effectiveUserId);
     
     // Validate required fields
     if (!startDate || !endDate || !type) {
+      debug('Missing required fields');
       return NextResponse.json(
-        { error: "Missing required fields (startDate, endDate, type)" }, 
+        { error: "startDate, endDate, and type are required" },
         { status: 400 }
       );
     }
-
-    const id = randomUUID();
     
-    // Add more debug information
-    console.log("DATABASE_URL:", process.env.DATABASE_URL);
-    console.log("isPrismaEnabled:", isPrismaEnabled);
-    console.log("Prisma client available:", !!prisma);
-    console.log("Using userId:", userId);
+    let id: string;
     
-    // Force use Prisma in Vercel environment
-    if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
-      console.log("Using Prisma to create time off request");
-      try {
-        // First try to look up user by email if we have it
-        let userExists = null;
-        
-        if (userEmail) {
-          console.log("Looking up user by email:", userEmail);
-          userExists = await prisma?.user.findUnique({
-            where: { email: userEmail }
-          });
-          
-          if (userExists) {
-            console.log("Found user by email, updating userId from:", userId, "to:", userExists.id);
-            // Override userId with the one found by email
-            userId = userExists.id;
-          }
+    if (process.env.VERCEL || isPrismaEnabled) {
+      debug('Using Prisma to create time off request');
+      // Create request in Postgres with Prisma
+      const request = await prisma?.timeOffRequest.create({
+        data: {
+          userId: effectiveUserId,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          type,
+          status: 'PENDING',
+          reason: reason || null,
+        },
+        include: {
+          user: true
         }
-        
-        // If not found by email, try by ID
-        if (!userExists) {
-          console.log("Looking up user by ID:", userId);
-          userExists = await prisma?.user.findUnique({
-            where: { id: userId }
-          });
-        }
-        
-        if (!userExists) {
-          console.error(`User not found. Tried userId: ${userId} and email: ${userEmail}`);
-          return NextResponse.json({
-            error: "User not found in database. Please log out and log in again, or contact your administrator."
-          }, { status: 404 });
-        }
-        
-        console.log("Creating time off request for user:", userExists.id, userExists.email);
-        
-        await prisma?.timeOffRequest.create({
-          data: {
-            id,
-            userId: userExists.id, // Use the verified user ID
-            startDate: new Date(startDate),
-            endDate: new Date(endDate),
-            type,
-            status: 'PENDING',
-            reason: reason || null,
-          }
-        });
-        console.log("Successfully created time off request with Prisma");
-      } catch (prismaError) {
-        console.error("Prisma error:", prismaError);
-        throw prismaError;
-      }
+      });
+      
+      id = request?.id as string;
+      debug('Time off request created with ID:', id);
+      
     } else if (db) {
-      console.log("Using SQLite to create time off request");
-      console.log("Creating SQLite record with userId:", userId);
-      dbOperations.createTimeOffRequest?.run(
-        id, userId, startDate, endDate, type, reason
+      debug('Using SQLite to create time off request');
+      // Create request in SQLite
+      id = uuidv4();
+      const startDateObj = new Date(startDate);
+      const endDateObj = new Date(endDate);
+      
+      // Calculate working days
+      const workingDays = calculateWorkingDays(startDateObj, endDateObj);
+      debug('Working days calculated:', workingDays);
+      
+      const statement = db.prepare(`
+        INSERT INTO time_off_requests (
+          id, user_id, start_date, end_date, type, status, reason, working_days
+        ) VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?)
+      `);
+      
+      statement.run(
+        id, effectiveUserId, startDate, endDate, type, reason || null, workingDays
       );
+      debug('SQLite request created with ID:', id);
     } else {
       throw new Error("No database connection available");
     }
     
-    // Try to send email notification if function exists
+    // Try to send email notification to user
     try {
       if (typeof sendTimeOffRequestSubmittedEmail === 'function' && userEmail) {
         await sendTimeOffRequestSubmittedEmail(
@@ -214,8 +197,56 @@ export async function POST(req: Request) {
           type,         // type
           reason        // reason (optional)
         );
-        console.log("Sent time off request confirmation email to:", userEmail);
+        debug("Sent time off request confirmation email to user:", userEmail);
       }
+      
+      // Send notification to admin(s)
+      if (process.env.VERCEL || isPrismaEnabled) {
+        // Get admin users with Prisma
+        const adminUsers = await prisma?.user.findMany({
+          where: { role: 'ADMIN' }
+        });
+        
+        debug(`Found ${adminUsers?.length || 0} admin users to notify`);
+        
+        for (const admin of adminUsers || []) {
+          if (admin.email && typeof sendTimeOffRequestAdminNotification === 'function') {
+            await sendTimeOffRequestAdminNotification(
+              admin.email,
+              userName,
+              startDate,
+              endDate,
+              type,
+              id,
+              reason
+            );
+            debug("Sent admin notification to:", admin.email);
+          }
+        }
+      } else if (db) {
+        // Get admin users with SQLite
+        const admins = db.prepare(`
+          SELECT * FROM users WHERE role = 'ADMIN'
+        `).all() as Array<{ email: string, name: string }>;
+        
+        debug(`Found ${admins?.length || 0} admin users to notify`);
+        
+        for (const admin of admins) {
+          if (admin.email && typeof sendTimeOffRequestAdminNotification === 'function') {
+            await sendTimeOffRequestAdminNotification(
+              admin.email,
+              userName,
+              startDate,
+              endDate,
+              type,
+              id,
+              reason
+            );
+            debug("Sent admin notification to:", admin.email);
+          }
+        }
+      }
+      
     } catch (emailError) {
       console.error("Error sending email notification:", emailError);
       // Don't fail the request if email fails
