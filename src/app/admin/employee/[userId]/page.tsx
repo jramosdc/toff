@@ -31,6 +31,12 @@ interface TimeOffBalance {
   year: number;
 }
 
+interface UsedDays {
+  vacationDays: number;
+  sickDays: number;
+  paidLeave: number;
+}
+
 // Helper function to safely format dates
 const formatDate = (dateString: string) => {
   try {
@@ -59,71 +65,118 @@ type PageProps = {
 export default function EmployeePage({ params }: PageProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [requests, setRequests] = useState<TimeOffRequest[]>([]);
-  const [balance, setBalance] = useState<TimeOffBalance | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [error, setError] = useState('');
+  const { userId } = params;
   const [year, setYear] = useState(new Date().getFullYear());
+  const [user, setUser] = useState<User | null>(null);
+  const [balance, setBalance] = useState<TimeOffBalance | null>(null);
+  const [usedDays, setUsedDays] = useState<UsedDays | null>(null);
+  const [requests, setRequests] = useState<TimeOffRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [editMode, setEditMode] = useState(false);
+  const [editedBalance, setEditedBalance] = useState<{
+    vacationDays: number;
+    sickDays: number;
+    paidLeave: number;
+  } | null>(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
     } else if (session?.user?.role !== 'ADMIN') {
       router.push('/dashboard');
-    } else if (status === 'authenticated') {
+    } else {
       fetchUserData();
-      fetchUserRequests();
-      fetchUserBalance();
     }
-  }, [session, status, params.userId, year]);
+  }, [userId, year, session, status]);
 
   const fetchUserData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/admin/users/${params.userId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data);
-      } else {
-        setError('Failed to fetch user data');
+      setError('');
+      
+      // Fetch user details
+      const userResponse = await fetch(`/api/admin/users/${userId}`);
+      if (!userResponse.ok) {
+        throw new Error('Failed to fetch user data');
+      }
+      const userData = await userResponse.json();
+      setUser(userData);
+      
+      // Fetch time off balance
+      const balanceResponse = await fetch(`/api/admin/balance/${userId}?year=${year}`);
+      if (balanceResponse.ok) {
+        const balanceData = await balanceResponse.json();
+        setBalance(balanceData);
+        
+        // Initialize edited balance with current values
+        setEditedBalance({
+          vacationDays: balanceData.vacationDays,
+          sickDays: balanceData.sickDays,
+          paidLeave: balanceData.paidLeave,
+        });
+      }
+      
+      // Fetch used days
+      const usedDaysResponse = await fetch(`/api/admin/used-days/${userId}?year=${year}`);
+      if (usedDaysResponse.ok) {
+        const usedDaysData = await usedDaysResponse.json();
+        setUsedDays(usedDaysData);
+      }
+      
+      // Fetch time off requests
+      const requestsResponse = await fetch(`/api/admin/requests?userId=${userId}&year=${year}`);
+      if (requestsResponse.ok) {
+        const requestsData = await requestsResponse.json();
+        setRequests(requestsData);
       }
     } catch (err) {
-      setError('An error occurred while fetching user data');
+      setError('An error occurred while fetching data');
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchUserRequests = async () => {
+  const saveBalance = async () => {
+    if (!editedBalance || !userId) return;
+    
     try {
-      const response = await fetch(`/api/admin/requests/${params.userId}?year=${year}`);
-      if (response.ok) {
-        const data = await response.json();
-        setRequests(data);
-      } else {
-        setError('Failed to fetch user requests');
+      setLoading(true);
+      setError('');
+      setSuccess('');
+      
+      const response = await fetch(`/api/admin/balance/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...editedBalance,
+          year
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update balance');
       }
-    } catch (err) {
-      setError('An error occurred while fetching user requests');
+      
+      // Get the updated balance
+      const updatedBalance = await response.json();
+      setBalance(updatedBalance);
+      setSuccess('Balance updated successfully');
+      setEditMode(false);
+      
+      // Refresh data to get updated values
+      fetchUserData();
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while updating balance');
       console.error(err);
-    }
-  };
-
-  const fetchUserBalance = async () => {
-    try {
-      const response = await fetch(`/api/admin/balance/${params.userId}?year=${year}`);
-      if (response.ok) {
-        const data = await response.json();
-        setBalance(data);
-      } else {
-        setError('Failed to fetch user balance');
-      }
-    } catch (err) {
-      setError('An error occurred while fetching user balance');
-      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -225,9 +278,98 @@ export default function EmployeePage({ params }: PageProps) {
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">Time Off Balance ({year})</h3>
                   <div className="mt-2 text-gray-800">
-                    <p><span className="font-medium">Vacation Days:</span> {balance.vacationDays} days</p>
-                    <p><span className="font-medium">Sick Days:</span> {balance.sickDays} days</p>
-                    <p><span className="font-medium">Paid Leave:</span> {balance.paidLeave} days</p>
+                    {!editMode ? (
+                      <>
+                        <div className="mb-2">
+                          <span className="font-medium">Vacation Days:</span> 
+                          <span className="ml-2">{balance?.vacationDays || 0}</span>
+                          <span className="text-gray-500 text-sm ml-1">
+                            / {(balance?.vacationDays || 0) + (usedDays?.vacationDays || 0)} 
+                            {usedDays?.vacationDays ? ` (${usedDays.vacationDays} used)` : ''}
+                          </span>
+                        </div>
+                        <div className="mb-2">
+                          <span className="font-medium">Sick Days:</span> 
+                          <span className="ml-2">{balance?.sickDays || 0}</span>
+                          <span className="text-gray-500 text-sm ml-1">
+                            / {(balance?.sickDays || 0) + (usedDays?.sickDays || 0)}
+                            {usedDays?.sickDays ? ` (${usedDays.sickDays} used)` : ''}
+                          </span>
+                        </div>
+                        <div className="mb-2">
+                          <span className="font-medium">Paid Leave:</span> 
+                          <span className="ml-2">{balance?.paidLeave || 0}</span>
+                          <span className="text-gray-500 text-sm ml-1">
+                            / {(balance?.paidLeave || 0) + (usedDays?.paidLeave || 0)}
+                            {usedDays?.paidLeave ? ` (${usedDays.paidLeave} used)` : ''}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setEditMode(true)}
+                          className="mt-2 text-indigo-600 text-sm hover:text-indigo-800"
+                        >
+                          Edit Balance
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-3 gap-4 mb-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Vacation Days</label>
+                            <input
+                              type="number"
+                              min="0"
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              value={editedBalance?.vacationDays || 0}
+                              onChange={(e) => setEditedBalance({
+                                ...editedBalance!,
+                                vacationDays: parseInt(e.target.value) || 0
+                              })}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Sick Days</label>
+                            <input
+                              type="number"
+                              min="0"
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              value={editedBalance?.sickDays || 0}
+                              onChange={(e) => setEditedBalance({
+                                ...editedBalance!,
+                                sickDays: parseInt(e.target.value) || 0
+                              })}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Paid Leave</label>
+                            <input
+                              type="number"
+                              min="0"
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              value={editedBalance?.paidLeave || 0}
+                              onChange={(e) => setEditedBalance({
+                                ...editedBalance!,
+                                paidLeave: parseInt(e.target.value) || 0
+                              })}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={saveBalance}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditMode(false)}
+                            className="border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div>

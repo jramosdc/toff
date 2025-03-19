@@ -57,6 +57,11 @@ export default function AdminPage() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [balances, setBalances] = useState<Record<string, TimeOffBalance>>({});
+  const [usedDays, setUsedDays] = useState<Record<string, {
+    vacationDays: number;
+    sickDays: number;
+    paidLeave: number;
+  }>>({});
   const [pendingOvertimeRequests, setPendingOvertimeRequests] = useState<OvertimeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -105,14 +110,37 @@ export default function AdminPage() {
         
         // Fetch balances for each user
         const balancesMap: Record<string, TimeOffBalance> = {};
+        const usedDaysMap: Record<string, {
+          vacationDays: number;
+          sickDays: number;
+          paidLeave: number;
+        }> = {};
+        
         for (const user of data) {
+          // Fetch balance
           const balanceResponse = await fetch(`/api/admin/balance/${user.id}?year=${currentYear}`);
           if (balanceResponse.ok) {
             const balanceData = await balanceResponse.json();
             balancesMap[user.id] = balanceData;
           }
+          
+          // Fetch used days
+          const usedDaysResponse = await fetch(`/api/admin/used-days/${user.id}?year=${currentYear}`);
+          if (usedDaysResponse.ok) {
+            const usedDaysData = await usedDaysResponse.json();
+            usedDaysMap[user.id] = usedDaysData;
+          } else {
+            // Default to 0 if we can't fetch used days
+            usedDaysMap[user.id] = {
+              vacationDays: 0,
+              sickDays: 0,
+              paidLeave: 0
+            };
+          }
         }
+        
         setBalances(balancesMap);
+        setUsedDays(usedDaysMap);
       } else {
         setError('Failed to fetch users');
       }
@@ -470,52 +498,69 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {users.map((user) => (
-                  <tr key={user.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                      <div className="text-sm text-gray-700">{user.role}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">
-                      {user.email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input
-                        type="number"
-                        min="0"
-                        className="w-20 px-2 py-1 border border-gray-300 rounded text-gray-900"
-                        value={balances[user.id]?.vacationDays || 0}
-                        onChange={(e) => updateBalance(user.id, 'vacationDays', parseInt(e.target.value))}
-                      />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input
-                        type="number"
-                        min="0"
-                        className="w-20 px-2 py-1 border border-gray-300 rounded text-gray-900"
-                        value={balances[user.id]?.sickDays || 0}
-                        onChange={(e) => updateBalance(user.id, 'sickDays', parseInt(e.target.value))}
-                      />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input
-                        type="number"
-                        min="0"
-                        className="w-20 px-2 py-1 border border-gray-300 rounded text-gray-900"
-                        value={balances[user.id]?.paidLeave || 0}
-                        onChange={(e) => updateBalance(user.id, 'paidLeave', parseInt(e.target.value))}
-                      />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => router.push(`/admin/employee/${user.id}`)}
-                        className="text-indigo-600 hover:text-indigo-900 font-medium"
-                      >
-                        View Calendar
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {users.map((user) => {
+                  const balance = balances[user.id];
+                  const used = usedDays[user.id] || { vacationDays: 0, sickDays: 0, paidLeave: 0 };
+                  
+                  // Calculate total allocated (current balance + used days)
+                  const totalVacation = (balance?.vacationDays || 0) + used.vacationDays;
+                  const totalSick = (balance?.sickDays || 0) + used.sickDays;
+                  const totalPaidLeave = (balance?.paidLeave || 0) + used.paidLeave;
+                  
+                  return (
+                    <tr key={user.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <a href={`/admin/employee/${user.id}`} className="text-indigo-600 hover:text-indigo-900">
+                          {user.name}
+                        </a>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {user.email}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div>
+                          <span className="font-medium">{balance?.vacationDays || 0}</span>
+                          <span className="text-gray-500 text-xs ml-1">/ {totalVacation}</span>
+                          {used.vacationDays > 0 && (
+                            <span className="text-gray-500 text-xs ml-1">
+                              ({used.vacationDays} used)
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div>
+                          <span className="font-medium">{balance?.sickDays || 0}</span>
+                          <span className="text-gray-500 text-xs ml-1">/ {totalSick}</span>
+                          {used.sickDays > 0 && (
+                            <span className="text-gray-500 text-xs ml-1">
+                              ({used.sickDays} used)
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div>
+                          <span className="font-medium">{balance?.paidLeave || 0}</span>
+                          <span className="text-gray-500 text-xs ml-1">/ {totalPaidLeave}</span>
+                          {used.paidLeave > 0 && (
+                            <span className="text-gray-500 text-xs ml-1">
+                              ({used.paidLeave} used)
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <button
+                          onClick={() => router.push(`/admin/employee/${user.id}`)}
+                          className="text-indigo-600 hover:text-indigo-900 mr-4"
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

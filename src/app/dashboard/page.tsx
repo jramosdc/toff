@@ -33,6 +33,12 @@ interface OvertimeRequest {
   notes?: string;
 }
 
+interface UsedDays {
+  vacationDays: number;
+  sickDays: number;
+  paidLeave: number;
+}
+
 // Add this helper function to safely format dates
 const formatDate = (dateString: string) => {
   try {
@@ -69,6 +75,7 @@ export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [balance, setBalance] = useState<TimeOffBalance | null>(null);
+  const [usedDays, setUsedDays] = useState<UsedDays | null>(null);
   const [requests, setRequests] = useState<TimeOffRequest[]>([]);
   const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]);
   const [newRequest, setNewRequest] = useState({
@@ -91,6 +98,7 @@ export default function DashboardPage() {
       fetchBalance();
       fetchRequests();
       fetchOvertimeRequests();
+      fetchUsedDays();
       checkIfLastWeekOfMonth();
     }
   }, [session, status]);
@@ -107,6 +115,21 @@ export default function DashboardPage() {
     if (response.ok) {
       const data = await response.json();
       setBalance(data);
+    }
+  };
+
+  const fetchUsedDays = async () => {
+    const response = await fetch('/api/time-off/used-days');
+    if (response.ok) {
+      const data = await response.json();
+      setUsedDays(data);
+    } else {
+      // Default to 0 if API doesn't exist yet
+      setUsedDays({
+        vacationDays: 0,
+        sickDays: 0,
+        paidLeave: 0
+      });
     }
   };
 
@@ -289,17 +312,29 @@ export default function DashboardPage() {
                     <p className="mt-1 text-3xl font-semibold text-gray-900">
                       {balance.vacationDays}
                     </p>
+                    <p className="text-sm text-gray-500">
+                      of {(balance.vacationDays || 0) + (usedDays?.vacationDays || 0)} allocated
+                      {usedDays?.vacationDays ? ` (${usedDays.vacationDays} used)` : ''}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Sick Days</p>
                     <p className="mt-1 text-3xl font-semibold text-gray-900">
                       {balance.sickDays}
                     </p>
+                    <p className="text-sm text-gray-500">
+                      of {(balance.sickDays || 0) + (usedDays?.sickDays || 0)} allocated
+                      {usedDays?.sickDays ? ` (${usedDays.sickDays} used)` : ''}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Paid Leave</p>
                     <p className="mt-1 text-3xl font-semibold text-gray-900">
                       {balance.paidLeave}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      of {(balance.paidLeave || 0) + (usedDays?.paidLeave || 0)} allocated
+                      {usedDays?.paidLeave ? ` (${usedDays.paidLeave} used)` : ''}
                     </p>
                   </div>
                 </div>
