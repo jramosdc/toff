@@ -304,50 +304,73 @@ export default function DashboardPage() {
 
           {/* Balance Display */}
           {balance && (
-            <div className="bg-white overflow-hidden shadow rounded-lg divide-y divide-gray-200 mb-8">
+            <div className="bg-white overflow-hidden shadow rounded-lg mb-8">
               <div className="px-4 py-5 sm:p-6">
                 <h2 className="text-lg font-medium text-gray-900 mb-4">
-                  Your Balance
+                  Time Off Balance Summary
                 </h2>
-                <div className="grid grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Vacation Days</p>
-                    <p className="mt-1 text-3xl font-semibold text-gray-900">
-                      {balance.vacationDays}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      of {(balance.vacationDays || 0) + (usedDays?.vacationDays || 0)} allocated
-                      {usedDays?.vacationDays ? ` (${usedDays.vacationDays} used)` : ''}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Sick Days</p>
-                    <p className="mt-1 text-3xl font-semibold text-gray-900">
-                      {balance.sickDays}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      of {(balance.sickDays || 0) + (usedDays?.sickDays || 0)} allocated
-                      {usedDays?.sickDays ? ` (${usedDays.sickDays} used)` : ''}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {/* Vacation Days */}
+                  <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-400">
+                    <p className="text-sm font-medium text-gray-700">Vacation Days</p>
+                    <div className="flex items-end mt-1">
+                      <p className="text-3xl font-semibold text-blue-600">
+                        {balance.vacationDays}
+                      </p>
+                      <p className="text-sm text-gray-500 ml-2 mb-1">
+                        / {(balance.vacationDays || 0) + (usedDays?.vacationDays || 0)}
+                      </p>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {usedDays?.vacationDays ? `${usedDays.vacationDays} days used` : 'No days used'}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Paid Leave</p>
-                    <p className="mt-1 text-3xl font-semibold text-gray-900">
-                      {balance.paidLeave}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      of {(balance.paidLeave || 0) + (usedDays?.paidLeave || 0)} allocated
-                      {usedDays?.paidLeave ? ` (${usedDays.paidLeave} used)` : ''}
+                  
+                  {/* Sick Days */}
+                  <div className="bg-green-50 rounded-lg p-4 border-l-4 border-green-400">
+                    <p className="text-sm font-medium text-gray-700">Sick Days</p>
+                    <div className="flex items-end mt-1">
+                      <p className="text-3xl font-semibold text-green-600">
+                        {balance.sickDays}
+                      </p>
+                      <p className="text-sm text-gray-500 ml-2 mb-1">
+                        / {(balance.sickDays || 0) + (usedDays?.sickDays || 0)}
+                      </p>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {usedDays?.sickDays ? `${usedDays.sickDays} days used` : 'No days used'}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Personal Days</p>
-                    <p className="mt-1 text-3xl font-semibold text-gray-900">
-                      {balance.personalDays || 0}
+                  
+                  {/* Paid Leave */}
+                  <div className="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-400">
+                    <p className="text-sm font-medium text-gray-700">Paid Leave</p>
+                    <div className="flex items-end mt-1">
+                      <p className="text-3xl font-semibold text-purple-600">
+                        {balance.paidLeave}
+                      </p>
+                      <p className="text-sm text-gray-500 ml-2 mb-1">
+                        / {(balance.paidLeave || 0) + (usedDays?.paidLeave || 0)}
+                      </p>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {usedDays?.paidLeave ? `${usedDays.paidLeave} days used` : 'No days used'}
                     </p>
-                    <p className="text-sm text-gray-500">
-                      of {(balance.personalDays || 0) + (usedDays?.personalDays || 0)} allocated
-                      {usedDays?.personalDays ? ` (${usedDays.personalDays} used)` : ''}
+                  </div>
+                  
+                  {/* Personal Days */}
+                  <div className="bg-amber-50 rounded-lg p-4 border-l-4 border-amber-400">
+                    <p className="text-sm font-medium text-gray-700">Personal Days</p>
+                    <div className="flex items-end mt-1">
+                      <p className="text-3xl font-semibold text-amber-600">
+                        {balance.personalDays || 0}
+                      </p>
+                      <p className="text-sm text-gray-500 ml-2 mb-1">
+                        / {(balance.personalDays || 0) + (usedDays?.personalDays || 0)}
+                      </p>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {usedDays?.personalDays ? `${usedDays.personalDays} days used` : 'No days used'}
                     </p>
                   </div>
                 </div>
