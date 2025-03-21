@@ -2,22 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma, isPrismaEnabled } from '@/lib/db';
-
-// Helper function to calculate working days (excluding weekends)
-function calculateWorkingDays(start: Date, end: Date) {
-  let count = 0;
-  const current = new Date(start);
-
-  while (current <= end) {
-    const dayOfWeek = current.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      count++;
-    }
-    current.setDate(current.getDate() + 1);
-  }
-
-  return count;
-}
+import { calculateWorkingDays } from '@/lib/date-utils';
 
 export async function GET(
   request: NextRequest,

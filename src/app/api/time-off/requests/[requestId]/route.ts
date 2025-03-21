@@ -3,22 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import db, { prisma, isPrismaEnabled } from '@/lib/db';
 import { sendTimeOffRequestApprovedEmail, sendTimeOffRequestRejectedEmail } from '@/lib/email';
-
-// Helper function to calculate working days between two dates (excluding weekends)
-function calculateWorkingDays(start: Date, end: Date) {
-  let count = 0;
-  const current = new Date(start);
-
-  while (current <= end) {
-    const dayOfWeek = current.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      count++;
-    }
-    current.setDate(current.getDate() + 1);
-  }
-
-  return count;
-}
+import { calculateWorkingDays } from '@/lib/date-utils';
 
 // Get a specific time off request
 export async function GET(

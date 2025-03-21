@@ -6,9 +6,10 @@ import {
   sendTimeOffRequestSubmittedEmail, 
   sendTimeOffRequestAdminNotification 
 } from '@/lib/email';
-import db, { prisma, isPrismaEnabled } from '@/lib/db';
+import db, { prisma, isPrismaEnabled, dbOperations } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 import Debug from 'debug';
+import { calculateWorkingDays } from '@/lib/date-utils';
 
 interface TimeOffBalance {
   vacationDays: number;
@@ -79,9 +80,34 @@ export async function GET() {
     } else if (db) {
       console.log("Using SQLite to fetch time off requests");
       // SQLite fallback for development
-      requests = userRole === 'ADMIN'
-        ? dbOperations.getTimeOffRequests?.all('PENDING')
-        : dbOperations.getUserTimeOffRequests?.all(userId);
+      try {
+        // Attempt to use dbOperations if it exists
+        if (typeof dbOperations !== 'undefined') {
+          requests = userRole === 'ADMIN'
+            ? dbOperations.getTimeOffRequests?.all('PENDING')
+            : dbOperations.getUserTimeOffRequests?.all(userId);
+        } else {
+          // Fallback to direct SQLite queries
+          if (userRole === 'ADMIN') {
+            const stmt = db.prepare(`
+              SELECT t.*, u.name as user_name, u.email as user_email
+              FROM time_off_requests t
+              JOIN users u ON t.user_id = u.id
+              WHERE t.status = ?
+            `);
+            requests = stmt.all('PENDING');
+          } else {
+            const stmt = db.prepare(`
+              SELECT * FROM time_off_requests
+              WHERE user_id = ?
+            `);
+            requests = stmt.all(userId);
+          }
+        }
+      } catch (dbError) {
+        console.error("Error executing SQLite query:", dbError);
+        requests = [];
+      }
     } else {
       throw new Error("No database connection available");
     }
@@ -258,19 +284,4 @@ export async function POST(req: NextRequest) {
     console.error("Error creating time off request:", error);
     return NextResponse.json({ error: `Error creating time off request: ${error}` }, { status: 500 });
   }
-}
-
-function calculateWorkingDays(start: Date, end: Date) {
-  let count = 0;
-  const current = new Date(start);
-
-  while (current <= end) {
-    const dayOfWeek = current.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      count++;
-    }
-    current.setDate(current.getDate() + 1);
-  }
-
-  return count;
 } 
