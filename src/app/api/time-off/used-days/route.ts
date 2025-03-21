@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
     const usedDays = {
       vacationDays: 0,
       sickDays: 0,
-      paidLeave: 0
+      paidLeave: 0,
+      personalDays: 0
     };
     
     // Check if Prisma is available
@@ -52,7 +53,10 @@ export async function GET(request: NextRequest) {
           new Date(request.endDate)
         );
         
-        switch (request.type) {
+        // Use string comparison instead of enum to avoid type errors
+        const typeString = request.type.toString();
+        
+        switch (typeString) {
           case 'VACATION':
             usedDays.vacationDays += daysUsed;
             break;
@@ -61,6 +65,9 @@ export async function GET(request: NextRequest) {
             break;
           case 'PAID_LEAVE':
             usedDays.paidLeave += daysUsed;
+            break;
+          case 'PERSONAL':
+            usedDays.personalDays += daysUsed;
             break;
         }
       }

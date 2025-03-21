@@ -28,6 +28,7 @@ interface TimeOffBalance {
   vacationDays: number;
   sickDays: number;
   paidLeave: number;
+  personalDays: number;
   year: number;
 }
 
@@ -35,6 +36,7 @@ interface UsedDays {
   vacationDays: number;
   sickDays: number;
   paidLeave: number;
+  personalDays: number;
 }
 
 // Helper function to safely format dates
@@ -75,11 +77,7 @@ export default function EmployeePage({ params }: PageProps) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [editMode, setEditMode] = useState(false);
-  const [editedBalance, setEditedBalance] = useState<{
-    vacationDays: number;
-    sickDays: number;
-    paidLeave: number;
-  } | null>(null);
+  const [editedBalance, setEditedBalance] = useState<TimeOffBalance | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
@@ -112,11 +110,7 @@ export default function EmployeePage({ params }: PageProps) {
         setBalance(balanceData);
         
         // Initialize edited balance with current values
-        setEditedBalance({
-          vacationDays: balanceData.vacationDays,
-          sickDays: balanceData.sickDays,
-          paidLeave: balanceData.paidLeave,
-        });
+        setEditedBalance(balanceData);
       }
       
       // Fetch used days
@@ -304,6 +298,14 @@ export default function EmployeePage({ params }: PageProps) {
                             {usedDays?.paidLeave ? ` (${usedDays.paidLeave} used)` : ''}
                           </span>
                         </div>
+                        <div className="mb-2">
+                          <span className="font-medium">Personal Days:</span> 
+                          <span className="ml-2">{balance?.personalDays || 0}</span>
+                          <span className="text-gray-500 text-sm ml-1">
+                            / {(balance?.personalDays || 0) + (usedDays?.personalDays || 0)}
+                            {usedDays?.personalDays ? ` (${usedDays.personalDays} used)` : ''}
+                          </span>
+                        </div>
                         <button
                           onClick={() => setEditMode(true)}
                           className="mt-2 text-indigo-600 text-sm hover:text-indigo-800"
@@ -313,57 +315,77 @@ export default function EmployeePage({ params }: PageProps) {
                       </>
                     ) : (
                       <>
-                        <div className="grid grid-cols-3 gap-4 mb-4">
+                        <div className="grid grid-cols-2 gap-4 mt-2">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700">Vacation Days</label>
+                            <label htmlFor="vacationDays" className="block text-sm font-medium text-gray-700">Vacation Days</label>
                             <input
                               type="number"
+                              id="vacationDays"
                               min="0"
-                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                               value={editedBalance?.vacationDays || 0}
                               onChange={(e) => setEditedBalance({
-                                ...editedBalance!,
+                                ...(editedBalance || balance || { year: year }),
                                 vacationDays: parseInt(e.target.value) || 0
                               })}
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700">Sick Days</label>
+                            <label htmlFor="sickDays" className="block text-sm font-medium text-gray-700">Sick Days</label>
                             <input
                               type="number"
+                              id="sickDays"
                               min="0"
-                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                               value={editedBalance?.sickDays || 0}
                               onChange={(e) => setEditedBalance({
-                                ...editedBalance!,
+                                ...(editedBalance || balance || { year: year }),
                                 sickDays: parseInt(e.target.value) || 0
                               })}
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700">Paid Leave</label>
+                            <label htmlFor="paidLeave" className="block text-sm font-medium text-gray-700">Paid Leave</label>
                             <input
                               type="number"
+                              id="paidLeave"
                               min="0"
-                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                               value={editedBalance?.paidLeave || 0}
                               onChange={(e) => setEditedBalance({
-                                ...editedBalance!,
+                                ...(editedBalance || balance || { year: year }),
                                 paidLeave: parseInt(e.target.value) || 0
                               })}
                             />
                           </div>
+                          <div>
+                            <label htmlFor="personalDays" className="block text-sm font-medium text-gray-700">Personal Days</label>
+                            <input
+                              type="number"
+                              id="personalDays"
+                              min="0"
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                              value={editedBalance?.personalDays || 0}
+                              onChange={(e) => setEditedBalance({
+                                ...(editedBalance || balance || { year: year }),
+                                personalDays: parseInt(e.target.value) || 0
+                              })}
+                            />
+                          </div>
                         </div>
-                        <div className="flex space-x-2">
+                        <div className="flex space-x-2 mt-2">
                           <button
+                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
                             onClick={saveBalance}
-                            className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700"
                           >
-                            Save
+                            Save Changes
                           </button>
                           <button
-                            onClick={() => setEditMode(false)}
-                            className="border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm hover:bg-gray-50"
+                            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                            onClick={() => {
+                              setEditMode(false);
+                              setEditedBalance(null);
+                            }}
                           >
                             Cancel
                           </button>

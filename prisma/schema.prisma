@@ -10,7 +10,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL_UNPOOLED")
+  url      = env("DATABASE_URL")
 }
 
 // NextAuth.js Models
@@ -53,18 +53,26 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
 model User {
   id             String           @id @default(cuid())
-  email          String           @unique
   name           String
+  email          String           @unique
+  emailVerified  DateTime?        @map("email_verified")
   password       String?
+  image          String?
   role           Role             @default(EMPLOYEE)
-  timeOffBalance TimeOffBalance?
-  requests       TimeOffRequest[]
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
-  emailVerified  DateTime?        @map("email_verified")
-  image          String?
+  
+  // Relation fields
+  timeOffBalance TimeOffBalance[]
+  timeOffRequests TimeOffRequest[]
+  
   accounts       Account[]
   sessions       Session[]
 
@@ -75,13 +83,15 @@ model TimeOffBalance {
   id           String   @id @default(cuid())
   userId       String   @unique @map("user_id")
   user         User     @relation(fields: [userId], references: [id])
-  vacationDays Int      @default(0) @map("vacation_days")
-  sickDays     Int      @default(0) @map("sick_days")
-  paidLeave    Int      @default(0) @map("paid_leave")
+  vacationDays Int      @default(15) @map("vacation_days")
+  sickDays     Int      @default(7) @map("sick_days")
+  paidLeave    Int      @default(3) @map("paid_leave")
+  personalDays Int      @default(3) @map("personal_days")
   year         Int
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  @@unique([userId, year])
   @@map("time_off_balance")
 }
 
@@ -100,15 +110,11 @@ model TimeOffRequest {
   @@map("time_off_requests")
 }
 
-enum Role {
-  ADMIN
-  EMPLOYEE
-}
-
 enum TimeOffType {
   VACATION
   SICK
   PAID_LEAVE
+  PERSONAL
 }
 
 enum RequestStatus {

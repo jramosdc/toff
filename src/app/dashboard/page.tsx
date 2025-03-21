@@ -8,6 +8,7 @@ interface TimeOffBalance {
   vacationDays: number;
   sickDays: number;
   paidLeave: number;
+  personalDays: number;
 }
 
 interface TimeOffRequest {
@@ -15,7 +16,7 @@ interface TimeOffRequest {
   user_id: string;
   start_date: string;
   end_date: string;
-  type: 'VACATION' | 'SICK' | 'PAID_LEAVE';
+  type: 'VACATION' | 'SICK' | 'PAID_LEAVE' | 'PERSONAL';
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   reason?: string;
   user_name?: string;
@@ -37,6 +38,7 @@ interface UsedDays {
   vacationDays: number;
   sickDays: number;
   paidLeave: number;
+  personalDays: number;
 }
 
 // Add this helper function to safely format dates
@@ -128,7 +130,8 @@ export default function DashboardPage() {
       setUsedDays({
         vacationDays: 0,
         sickDays: 0,
-        paidLeave: 0
+        paidLeave: 0,
+        personalDays: 0
       });
     }
   };
@@ -306,7 +309,7 @@ export default function DashboardPage() {
                 <h2 className="text-lg font-medium text-gray-900 mb-4">
                   Your Balance
                 </h2>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-4 gap-4">
                   <div>
                     <p className="text-sm font-medium text-gray-500">Vacation Days</p>
                     <p className="mt-1 text-3xl font-semibold text-gray-900">
@@ -335,6 +338,16 @@ export default function DashboardPage() {
                     <p className="text-sm text-gray-500">
                       of {(balance.paidLeave || 0) + (usedDays?.paidLeave || 0)} allocated
                       {usedDays?.paidLeave ? ` (${usedDays.paidLeave} used)` : ''}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Personal Days</p>
+                    <p className="mt-1 text-3xl font-semibold text-gray-900">
+                      {balance.personalDays || 0}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      of {(balance.personalDays || 0) + (usedDays?.personalDays || 0)} allocated
+                      {usedDays?.personalDays ? ` (${usedDays.personalDays} used)` : ''}
                     </p>
                   </div>
                 </div>
@@ -410,6 +423,7 @@ export default function DashboardPage() {
                       <option value="VACATION">Vacation</option>
                       <option value="SICK">Sick Leave</option>
                       <option value="PAID_LEAVE">Paid Leave</option>
+                      <option value="PERSONAL">Personal Time Off</option>
                     </select>
                   </div>
                 </div>

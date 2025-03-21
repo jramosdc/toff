@@ -222,6 +222,23 @@ export async function PATCH(
             }
           });
           console.log(`Deducted ${daysRequested} paid leave days from balance`);
+        } else if (existingRequest.type === 'PERSONAL') {
+          // Check if user has enough personal days
+          if (userBalance.personalDays < daysRequested) {
+            return NextResponse.json(
+              { error: 'Not enough personal days available' },
+              { status: 400 }
+            );
+          }
+          
+          // Deduct from personal days balance
+          updatedBalance = await prisma?.timeOffBalance.update({
+            where: { id: userBalance.id },
+            data: { 
+              personalDays: userBalance.personalDays - daysRequested 
+            }
+          });
+          console.log(`Deducted ${daysRequested} personal days from balance`);
         }
         
         console.log("Updated balance:", updatedBalance);
@@ -379,6 +396,20 @@ export async function PATCH(
             'UPDATE time_off_balances SET paid_leave = paid_leave - ? WHERE id = ?'
           ).run(daysRequested, userBalance.id);
           console.log(`Deducted ${daysRequested} paid leave days from balance`);
+        } else if (existingRequest.type === 'PERSONAL') {
+          // Check if user has enough personal days
+          if (userBalance.personal_days < daysRequested) {
+            return NextResponse.json(
+              { error: 'Not enough personal days available' },
+              { status: 400 }
+            );
+          }
+          
+          // Deduct from personal days balance
+          db.prepare(
+            'UPDATE time_off_balances SET personal_days = personal_days - ? WHERE id = ?'
+          ).run(daysRequested, userBalance.id);
+          console.log(`Deducted ${daysRequested} personal days from balance`);
         }
       }
 
