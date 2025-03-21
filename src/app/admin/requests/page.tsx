@@ -181,8 +181,13 @@ export default function AllRequestsPage() {
                 </div>
                 <div className="ml-3">
                   <p className="text-sm text-blue-700">
-                    <strong>Note:</strong> Time off calculations automatically exclude weekends and federal holidays. Only working days are counted towards the time off balance.
+                    <strong>Note:</strong> Time off calculations automatically exclude weekends and holidays. Only working days are counted towards the time off balance.
                   </p>
+                  <ul className="text-sm text-blue-700 mt-1 list-disc list-inside pl-2">
+                    <li>All federal holidays</li>
+                    <li>Good Friday (April 18, 2025)</li>
+                    <li>Christmas Eve (December 24)</li>
+                  </ul>
                 </div>
               </div>
             </div>

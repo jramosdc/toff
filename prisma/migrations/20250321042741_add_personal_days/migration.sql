@@ -40,5 +40,26 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 -- CreateIndex
 CREATE UNIQUE INDEX "TimeOffBalance_userId_key" ON "TimeOffBalance"("userId");
 
--- AlterEnum
-ALTER TYPE "TimeOffType" ADD VALUE 'PERSONAL'; 
+-- Compatible approach for enum modification
+-- End the transaction to release locks
+COMMIT;
+
+-- Conditionally add enum value if it doesn't exist (safer approach)
+DO $$
+BEGIN
+    -- Check if PERSONAL already exists in the enum
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'PERSONAL' 
+        AND enumtypid = (
+            SELECT oid FROM pg_type WHERE typname = 'timeofftype'
+        )
+    ) THEN
+        -- Add the PERSONAL value to the enum
+        ALTER TYPE "TimeOffType" ADD VALUE 'PERSONAL';
+    END IF;
+END
+$$;
+
+-- Start a new transaction for any remaining changes
+BEGIN; 

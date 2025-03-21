@@ -3,9 +3,9 @@
  */
 
 /**
- * Checks if a date is a US federal holiday in 2025
+ * Checks if a date is a US federal holiday or a company holiday in 2025
  * @param date Date to check
- * @returns boolean indicating if the date is a federal holiday
+ * @returns boolean indicating if the date is a holiday
  */
 export function isFederalHoliday(date: Date): boolean {
   // Format date as yyyy-mm-dd for easy comparison
@@ -23,6 +23,7 @@ export function isFederalHoliday(date: Date): boolean {
     '6-19': ['Juneteenth'],
     '7-4': ['Independence Day'],
     '11-11': ['Veterans Day'],
+    '12-24': ['Christmas Eve'],
     '12-25': ['Christmas Day']
   };
   
@@ -31,14 +32,15 @@ export function isFederalHoliday(date: Date): boolean {
     return true;
   }
   
-  // Check floating holidays for 2025
-  // These are specific to 2025
+  // Check year-specific floating holidays for 2025
   if (year === 2025) {
     switch (dateString) {
       // MLK Day - Third Monday in January
       case '1-20': return true;
       // Washington's Birthday/Presidents Day - Third Monday in February
       case '2-17': return true;
+      // Good Friday - April 18, 2025
+      case '4-18': return true;
       // Memorial Day - Last Monday in May
       case '5-26': return true;
       // Labor Day - First Monday in September  
@@ -58,7 +60,7 @@ export function isFederalHoliday(date: Date): boolean {
 }
 
 /**
- * Calculate working days between two dates, excluding weekends and federal holidays
+ * Calculate working days between two dates, excluding weekends and holidays
  * @param start Start date
  * @param end End date
  * @returns Number of working days
@@ -71,7 +73,7 @@ export function calculateWorkingDays(start: Date, end: Date): number {
     const dayOfWeek = current.getDay();
     // Skip weekends (0 = Sunday, 6 = Saturday)
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      // Skip federal holidays
+      // Skip holidays (federal holidays and company holidays)
       if (!isFederalHoliday(current)) {
         count++;
       }

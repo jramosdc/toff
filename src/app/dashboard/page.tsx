@@ -393,8 +393,13 @@ export default function DashboardPage() {
                   </div>
                   <div className="ml-3">
                     <p className="text-sm text-blue-700">
-                      <strong>Note:</strong> Weekends and federal holidays are automatically excluded from time off calculations.
+                      <strong>Note:</strong> Weekends and holidays are automatically excluded from time off calculations, including:
                     </p>
+                    <ul className="text-sm text-blue-700 mt-1 list-disc list-inside pl-2">
+                      <li>All federal holidays</li>
+                      <li>Good Friday (April 18, 2025)</li>
+                      <li>Christmas Eve (December 24)</li>
+                    </ul>
                   </div>
                 </div>
               </div>
