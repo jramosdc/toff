@@ -250,171 +250,130 @@ export default function EmployeePage({ params }: PageProps) {
           </div>
         </div>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
+        {/* Time Off Balance Section */}
+        <div className="bg-white shadow rounded-lg mb-8">
+          <div className="px-4 py-5 sm:p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-medium text-gray-900">Time Off Balance</h2>
+              {!editMode ? (
+                <button
+                  onClick={() => setEditMode(true)}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                >
+                  Edit Balance
+                </button>
+              ) : (
+                <div className="flex space-x-2">
+                  <button
+                    onClick={saveBalance}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                  >
+                    Save Changes
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditMode(false);
+                      setEditedBalance(balance);
+                    }}
+                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
 
-        {/* Employee Info Card */}
-        {user && balance && (
-          <div className="bg-white shadow sm:rounded-lg mb-8">
-            <div className="px-4 py-5 sm:p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">Employee Details</h3>
-                  <div className="mt-2 text-gray-800">
-                    <p><span className="font-medium">Name:</span> {user.name}</p>
-                    <p><span className="font-medium">Email:</span> {user.email}</p>
-                    <p><span className="font-medium">Role:</span> {user.role}</p>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">Time Off Balance ({year})</h3>
-                  <div className="mt-2 text-gray-800">
-                    {!editMode ? (
-                      <>
-                        <div className="mb-2">
-                          <span className="font-medium">Vacation Days:</span> 
-                          <span className="ml-2">{balance?.vacationDays || 0}</span>
-                          <span className="text-gray-500 text-sm ml-1">
-                            / {(balance?.vacationDays || 0) + (usedDays?.vacationDays || 0)} 
-                            {usedDays?.vacationDays ? ` (${usedDays.vacationDays} used)` : ''}
-                          </span>
-                        </div>
-                        <div className="mb-2">
-                          <span className="font-medium">Sick Days:</span> 
-                          <span className="ml-2">{balance?.sickDays || 0}</span>
-                          <span className="text-gray-500 text-sm ml-1">
-                            / {(balance?.sickDays || 0) + (usedDays?.sickDays || 0)}
-                            {usedDays?.sickDays ? ` (${usedDays.sickDays} used)` : ''}
-                          </span>
-                        </div>
-                        <div className="mb-2">
-                          <span className="font-medium">Paid Leave:</span> 
-                          <span className="ml-2">{balance?.paidLeave || 0}</span>
-                          <span className="text-gray-500 text-sm ml-1">
-                            / {(balance?.paidLeave || 0) + (usedDays?.paidLeave || 0)}
-                            {usedDays?.paidLeave ? ` (${usedDays.paidLeave} used)` : ''}
-                          </span>
-                        </div>
-                        <div className="mb-2">
-                          <span className="font-medium">Personal Days:</span> 
-                          <span className="ml-2">{balance?.personalDays || 0}</span>
-                          <span className="text-gray-500 text-sm ml-1">
-                            / {(balance?.personalDays || 0) + (usedDays?.personalDays || 0)}
-                            {usedDays?.personalDays ? ` (${usedDays.personalDays} used)` : ''}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setEditMode(true)}
-                          className="mt-2 text-indigo-600 text-sm hover:text-indigo-800"
-                        >
-                          Edit Balance
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-2 gap-4 mt-2">
-                          <div>
-                            <label htmlFor="vacationDays" className="block text-sm font-medium text-gray-700">Vacation Days</label>
-                            <input
-                              type="number"
-                              id="vacationDays"
-                              min="0"
-                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                              value={editedBalance?.vacationDays || 0}
-                              onChange={(e) => setEditedBalance({
-                                ...(editedBalance || balance || { year: year }),
-                                vacationDays: parseInt(e.target.value) || 0
-                              })}
-                            />
-                          </div>
-                          <div>
-                            <label htmlFor="sickDays" className="block text-sm font-medium text-gray-700">Sick Days</label>
-                            <input
-                              type="number"
-                              id="sickDays"
-                              min="0"
-                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                              value={editedBalance?.sickDays || 0}
-                              onChange={(e) => setEditedBalance({
-                                ...(editedBalance || balance || { year: year }),
-                                sickDays: parseInt(e.target.value) || 0
-                              })}
-                            />
-                          </div>
-                          <div>
-                            <label htmlFor="paidLeave" className="block text-sm font-medium text-gray-700">Paid Leave</label>
-                            <input
-                              type="number"
-                              id="paidLeave"
-                              min="0"
-                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                              value={editedBalance?.paidLeave || 0}
-                              onChange={(e) => setEditedBalance({
-                                ...(editedBalance || balance || { year: year }),
-                                paidLeave: parseInt(e.target.value) || 0
-                              })}
-                            />
-                          </div>
-                          <div>
-                            <label htmlFor="personalDays" className="block text-sm font-medium text-gray-700">Personal Days</label>
-                            <input
-                              type="number"
-                              id="personalDays"
-                              min="0"
-                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                              value={editedBalance?.personalDays || 0}
-                              onChange={(e) => setEditedBalance({
-                                ...(editedBalance || balance || { year: year }),
-                                personalDays: parseInt(e.target.value) || 0
-                              })}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex space-x-2 mt-2">
-                          <button
-                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                            onClick={saveBalance}
-                          >
-                            Save Changes
-                          </button>
-                          <button
-                            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                            onClick={() => {
-                              setEditMode(false);
-                              setEditedBalance(null);
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">Legend</h3>
-                  <div className="mt-2 space-y-2 text-gray-800">
-                    <div className="flex items-center">
-                      <div className="w-4 h-4 bg-blue-100 border border-blue-300 rounded mr-2"></div>
-                      <span>Vacation</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="w-4 h-4 bg-red-100 border border-red-300 rounded mr-2"></div>
-                      <span>Sick Leave</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="w-4 h-4 bg-green-100 border border-green-300 rounded mr-2"></div>
-                      <span>Paid Leave</span>
-                    </div>
-                  </div>
-                </div>
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                {success}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Vacation Days */}
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                <h3 className="text-sm font-medium text-blue-800">Vacation Days</h3>
+                {editMode ? (
+                  <input
+                    type="number"
+                    value={editedBalance?.vacationDays || 0}
+                    onChange={(e) => setEditedBalance(prev => prev ? {...prev, vacationDays: parseInt(e.target.value)} : null)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    min="0"
+                  />
+                ) : (
+                  <p className="mt-1 text-2xl font-semibold text-blue-900">
+                    {balance?.vacationDays || 0}
+                    {usedDays && <span className="text-sm text-blue-600 ml-2">(Used: {usedDays.vacationDays})</span>}
+                  </p>
+                )}
+              </div>
+
+              {/* Sick Days */}
+              <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+                <h3 className="text-sm font-medium text-red-800">Sick Days</h3>
+                {editMode ? (
+                  <input
+                    type="number"
+                    value={editedBalance?.sickDays || 0}
+                    onChange={(e) => setEditedBalance(prev => prev ? {...prev, sickDays: parseInt(e.target.value)} : null)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
+                    min="0"
+                  />
+                ) : (
+                  <p className="mt-1 text-2xl font-semibold text-red-900">
+                    {balance?.sickDays || 0}
+                    {usedDays && <span className="text-sm text-red-600 ml-2">(Used: {usedDays.sickDays})</span>}
+                  </p>
+                )}
+              </div>
+
+              {/* Paid Leave */}
+              <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded">
+                <h3 className="text-sm font-medium text-green-800">Paid Leave</h3>
+                {editMode ? (
+                  <input
+                    type="number"
+                    value={editedBalance?.paidLeave || 0}
+                    onChange={(e) => setEditedBalance(prev => prev ? {...prev, paidLeave: parseInt(e.target.value)} : null)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm"
+                    min="0"
+                  />
+                ) : (
+                  <p className="mt-1 text-2xl font-semibold text-green-900">
+                    {balance?.paidLeave || 0}
+                    {usedDays && <span className="text-sm text-green-600 ml-2">(Used: {usedDays.paidLeave})</span>}
+                  </p>
+                )}
+              </div>
+
+              {/* Personal Days */}
+              <div className="bg-purple-50 border-l-4 border-purple-400 p-4 rounded">
+                <h3 className="text-sm font-medium text-purple-800">Personal Days</h3>
+                {editMode ? (
+                  <input
+                    type="number"
+                    value={editedBalance?.personalDays || 0}
+                    onChange={(e) => setEditedBalance(prev => prev ? {...prev, personalDays: parseInt(e.target.value)} : null)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                    min="0"
+                  />
+                ) : (
+                  <p className="mt-1 text-2xl font-semibold text-purple-900">
+                    {balance?.personalDays || 0}
+                    {usedDays && <span className="text-sm text-purple-600 ml-2">(Used: {usedDays.personalDays})</span>}
+                  </p>
+                )}
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Calendar */}
         <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-8">

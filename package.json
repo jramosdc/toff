@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && node scripts/fix-postgres-enum.js",
     "seed": "node scripts/seed-db.js",
     "reset-time-off": "node scripts/reset-time-off-data.js"
   },

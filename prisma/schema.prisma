@@ -4,6 +4,8 @@
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
+// Added comment to trigger new migration for PERSONAL enum value - 2025-03-24
+
 generator client {
   provider = "prisma-client-js"
 }
