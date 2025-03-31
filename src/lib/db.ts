@@ -17,7 +17,18 @@ interface TimeOffBalance {
 export const isPrismaEnabled = process.env.VERCEL || process.env.DATABASE_URL?.includes('postgresql') || process.env.USE_PRISMA === 'true';
 
 // Initialize Prisma if PostgreSQL is configured or on Vercel
-export const prisma = isPrismaEnabled ? new PrismaClient() : null;
+declare global {
+  var prisma: PrismaClient | undefined;
+}
+
+let prismaClient: PrismaClient | undefined;
+if (isPrismaEnabled) {
+  prismaClient = global.prisma || new PrismaClient();
+  if (process.env.NODE_ENV !== 'production') {
+    global.prisma = prismaClient;
+  }
+}
+export const prisma = prismaClient;
 
 // Initialize SQLite only if not using Prisma and not on Vercel
 const db = (!isPrismaEnabled && !process.env.VERCEL) 
@@ -124,14 +135,18 @@ export const dbOperations = db ? {
     SELECT * FROM time_off_balance WHERE user_id = ? AND year = ?
   `).get,
 
-  createOrUpdateTimeOffBalance: db.transaction((id: string, userId: string, vacationDays: number, sickDays: number, paidLeave: number, personalDays: number, year: number) => {
-    const existingBalance = dbOperations.getUserTimeOffBalance(userId, year);
-    if (existingBalance) {
-      dbOperations.updateTimeOffBalance.run(vacationDays, sickDays, paidLeave, personalDays, userId, year);
-    } else {
-      dbOperations.createTimeOffBalance.run(id, userId, vacationDays, sickDays, paidLeave, personalDays, year);
+  createOrUpdateTimeOffBalance: function(id: string, userId: string, vacationDays: number, sickDays: number, paidLeave: number, personalDays: number, year: number) {
+    if (!db || !this.getUserTimeOffBalance || !this.updateTimeOffBalance || !this.createTimeOffBalance) {
+      throw new Error('Database operations not available');
     }
-  }),
+
+    const existingBalance = this.getUserTimeOffBalance(userId, year);
+    if (existingBalance) {
+      this.updateTimeOffBalance.run(vacationDays, sickDays, paidLeave, personalDays, userId, year);
+    } else {
+      this.createTimeOffBalance.run(id, userId, vacationDays, sickDays, paidLeave, personalDays, year);
+    }
+  },
 
   // Time off request operations
   createTimeOffRequest: db.prepare(`
@@ -189,6 +204,10 @@ export const dbOperations = db ? {
 
   // Adds vacation days when overtime is approved
   addVacationDaysFromOvertime: function(userId: string, hours: number, year: number) {
+    if (!db || !this.getUserTimeOffBalance || !this.updateTimeOffBalance || !this.createTimeOffBalance) {
+      throw new Error('Database operations not available');
+    }
+
     // Convert hours to days (8 hours = 1 day)
     const daysToAdd = hours / 8;
     

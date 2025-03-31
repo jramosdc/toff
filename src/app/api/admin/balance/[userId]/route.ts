@@ -45,8 +45,12 @@ export async function GET(
     if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
       console.log("Using Prisma to get user balance");
       
+      if (!prisma) {
+        throw new Error("Prisma client not available");
+      }
+      
       // Check if user exists
-      const user = await prisma?.user.findUnique({
+      const user = await prisma.user.findUnique({
         where: { id: userId }
       });
       
@@ -55,7 +59,7 @@ export async function GET(
       }
       
       // Get balance from Prisma
-      balance = await prisma?.timeOffBalance.findFirst({
+      balance = await prisma.timeOffBalance.findFirst({
         where: {
           userId,
           year
@@ -67,7 +71,7 @@ export async function GET(
         const balanceId = randomUUID();
         console.log("Creating default balance with Prisma for user:", userId);
         
-        balance = await prisma?.timeOffBalance.create({
+        balance = await prisma.timeOffBalance.create({
           data: {
             id: balanceId,
             userId,
@@ -78,8 +82,6 @@ export async function GET(
             year
           }
         });
-        
-        return NextResponse.json(balance);
       }
       
       return NextResponse.json(balance);
@@ -87,7 +89,11 @@ export async function GET(
     } else if (db) {
       console.log("Using SQLite to get user balance");
       // Use SQLite in development
-      balance = dbOperations.getUserTimeOffBalance?.get(userId, year) as TimeOffBalance | undefined;
+      if (!dbOperations) {
+        throw new Error("SQLite operations not available");
+      }
+
+      balance = dbOperations.getUserTimeOffBalance(userId, year) as TimeOffBalance | undefined;
 
       if (!balance) {
         // Create default balance if none exists
@@ -102,7 +108,7 @@ export async function GET(
           year
         };
 
-        dbOperations.createTimeOffBalance?.run(
+        dbOperations.createTimeOffBalance.run(
           balanceId,
           userId,
           defaultBalance.vacationDays,
@@ -172,8 +178,12 @@ export async function PUT(
     if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
       console.log("Using Prisma to update user balance");
       
+      if (!prisma) {
+        throw new Error("Prisma client not available");
+      }
+      
       // Check if user exists
-      const user = await prisma?.user.findUnique({
+      const user = await prisma.user.findUnique({
         where: { id: userId }
       });
       
@@ -182,7 +192,7 @@ export async function PUT(
       }
       
       // Find existing balance
-      const existingBalance = await prisma?.timeOffBalance.findFirst({
+      const existingBalance = await prisma.timeOffBalance.findFirst({
         where: {
           userId,
           year: currentYear
@@ -192,7 +202,7 @@ export async function PUT(
       if (existingBalance) {
         // Update existing balance
         console.log("Updating existing balance:", existingBalance.id);
-        updatedBalance = await prisma?.timeOffBalance.update({
+        updatedBalance = await prisma.timeOffBalance.update({
           where: { id: existingBalance.id },
           data: {
             vacationDays,
@@ -205,7 +215,7 @@ export async function PUT(
         // Create new balance
         console.log("Creating new balance for user", userId);
         const balanceId = randomUUID();
-        updatedBalance = await prisma?.timeOffBalance.create({
+        updatedBalance = await prisma.timeOffBalance.create({
           data: {
             id: balanceId,
             userId,
@@ -223,10 +233,14 @@ export async function PUT(
     } else if (db) {
       console.log("Using SQLite to update user balance");
       
+      if (!dbOperations) {
+        throw new Error("SQLite operations not available");
+      }
+      
       const balanceId = randomUUID();
       
       // Use the createOrUpdateTimeOffBalance function
-      dbOperations.createOrUpdateTimeOffBalance?.(
+      dbOperations.createOrUpdateTimeOffBalance(
         balanceId,
         userId,
         vacationDays,
@@ -237,7 +251,7 @@ export async function PUT(
       );
 
       // Get the updated balance
-      const sqliteBalance = dbOperations.getUserTimeOffBalance?.get(userId, currentYear) as TimeOffBalance;
+      const sqliteBalance = dbOperations.getUserTimeOffBalance(userId, currentYear) as TimeOffBalance;
 
       if (!sqliteBalance) {
         return NextResponse.json({ error: 'Failed to update balance' }, { status: 500 });
