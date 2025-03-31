@@ -83,7 +83,7 @@ model User {
 
 model TimeOffBalance {
   id           String   @id @default(cuid())
-  userId       String   @unique @map("user_id")
+  userId       String   @map("user_id")
   user         User     @relation(fields: [userId], references: [id])
   vacationDays Int      @default(15) @map("vacation_days")
   sickDays     Int      @default(7) @map("sick_days")
@@ -93,7 +93,7 @@ model TimeOffBalance {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  @@unique([userId, year])
+  @@unique([userId, year], name: "userId_year")
   @@map("time_off_balance")
 }
 

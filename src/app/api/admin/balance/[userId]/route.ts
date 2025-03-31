@@ -11,6 +11,7 @@ interface TimeOffBalance {
   vacation_days: number;
   sick_days: number;
   paid_leave: number;
+  personal_days: number;
   year: number;
   created_at?: string;
   updated_at?: string;
@@ -73,6 +74,7 @@ export async function GET(
             vacationDays: 22,
             sickDays: 8,
             paidLeave: 0,
+            personalDays: 3,
             year
           }
         });
@@ -96,6 +98,7 @@ export async function GET(
           vacationDays: 22,
           sickDays: 8,
           paidLeave: 0,
+          personalDays: 3,
           year
         };
 
@@ -105,6 +108,7 @@ export async function GET(
           defaultBalance.vacationDays,
           defaultBalance.sickDays,
           defaultBalance.paidLeave,
+          defaultBalance.personalDays,
           year
         );
 
@@ -117,6 +121,7 @@ export async function GET(
         vacationDays: balance.vacation_days,
         sickDays: balance.sick_days,
         paidLeave: balance.paid_leave,
+        personalDays: balance.personal_days,
         year: balance.year
       });
     } else {
@@ -141,16 +146,21 @@ export async function PUT(
   }
 
   try {
-    const { vacationDays, sickDays, paidLeave, year } = await request.json();
+    const { vacationDays, sickDays, paidLeave, personalDays, year } = await request.json();
     
-    if (typeof vacationDays !== 'number' || typeof sickDays !== 'number' || typeof paidLeave !== 'number') {
+    if (
+      typeof vacationDays !== 'number' || 
+      typeof sickDays !== 'number' || 
+      typeof paidLeave !== 'number' ||
+      typeof personalDays !== 'number'
+    ) {
       return NextResponse.json({ error: 'Invalid balance data' }, { status: 400 });
     }
 
     const currentYear = year || new Date().getFullYear();
     
     console.log("Updating balance for userId:", userId, "year:", currentYear);
-    console.log("Balance data:", { vacationDays, sickDays, paidLeave });
+    console.log("Balance data:", { vacationDays, sickDays, paidLeave, personalDays });
     console.log("DATABASE_URL:", process.env.DATABASE_URL);
     console.log("isPrismaEnabled:", isPrismaEnabled);
     console.log("Prisma client available:", !!prisma);
@@ -187,7 +197,8 @@ export async function PUT(
           data: {
             vacationDays,
             sickDays,
-            paidLeave
+            paidLeave,
+            personalDays
           }
         });
       } else {
@@ -201,6 +212,7 @@ export async function PUT(
             vacationDays,
             sickDays,
             paidLeave,
+            personalDays,
             year: currentYear
           }
         });
@@ -220,11 +232,16 @@ export async function PUT(
         vacationDays,
         sickDays,
         paidLeave,
+        personalDays,
         currentYear
       );
 
       // Get the updated balance
       const sqliteBalance = dbOperations.getUserTimeOffBalance?.get(userId, currentYear) as TimeOffBalance;
+
+      if (!sqliteBalance) {
+        return NextResponse.json({ error: 'Failed to update balance' }, { status: 500 });
+      }
 
       updatedBalance = {
         id: sqliteBalance.id,
@@ -232,6 +249,7 @@ export async function PUT(
         vacationDays: sqliteBalance.vacation_days,
         sickDays: sqliteBalance.sick_days,
         paidLeave: sqliteBalance.paid_leave,
+        personalDays: sqliteBalance.personal_days,
         year: sqliteBalance.year
       };
       
