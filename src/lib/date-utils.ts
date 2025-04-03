@@ -68,8 +68,14 @@ export function isFederalHoliday(date: Date): boolean {
 export function calculateWorkingDays(start: Date, end: Date): number {
   let count = 0;
   const current = new Date(start);
+  
+  // Set time to start of day to avoid timezone issues
+  current.setHours(0, 0, 0, 0);
+  const endDate = new Date(end);
+  endDate.setHours(23, 59, 59, 999);
 
-  while (current <= end) {
+  // Include both start and end dates in the calculation
+  while (current <= endDate) {
     const dayOfWeek = current.getDay();
     // Skip weekends (0 = Sunday, 6 = Saturday)
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
