@@ -467,4 +467,155 @@ export async function PATCH(
       { status: 500 }
     );
   }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { requestId: string } }
+) {
+  const session = await getServerSession(authOptions);
+  const requestId = params.requestId;
+
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    // Use Prisma in production
+    if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
+      // Get the request details first
+      const timeOffRequest = await prisma?.timeOffRequest.findUnique({
+        where: { id: requestId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            }
+          }
+        }
+      });
+
+      if (!timeOffRequest) {
+        return NextResponse.json({ error: 'Time off request not found' }, { status: 404 });
+      }
+
+      // If the request was approved, we need to restore the balance
+      if (timeOffRequest.status === 'APPROVED') {
+        const currentYear = new Date().getFullYear();
+        const userBalance = await prisma?.timeOffBalance.findFirst({
+          where: {
+            userId: timeOffRequest.userId,
+            year: currentYear
+          }
+        });
+
+        if (userBalance) {
+          // Calculate the number of days to restore
+          const startDate = new Date(timeOffRequest.startDate);
+          const endDate = new Date(timeOffRequest.endDate);
+          const daysToRestore = calculateWorkingDays(startDate, endDate);
+
+          // Restore the appropriate balance based on request type
+          if (timeOffRequest.type === 'VACATION') {
+            await prisma?.timeOffBalance.update({
+              where: { id: userBalance.id },
+              data: { vacationDays: userBalance.vacationDays + daysToRestore }
+            });
+          } else if (timeOffRequest.type === 'SICK') {
+            await prisma?.timeOffBalance.update({
+              where: { id: userBalance.id },
+              data: { sickDays: userBalance.sickDays + daysToRestore }
+            });
+          } else if (timeOffRequest.type === 'PAID_LEAVE') {
+            await prisma?.timeOffBalance.update({
+              where: { id: userBalance.id },
+              data: { paidLeave: userBalance.paidLeave + daysToRestore }
+            });
+          } else if (timeOffRequest.type === 'PERSONAL') {
+            await prisma?.timeOffBalance.update({
+              where: { id: userBalance.id },
+              data: { personalDays: userBalance.personalDays + daysToRestore }
+            });
+          }
+        }
+      }
+
+      // Delete the request
+      await prisma?.timeOffRequest.delete({
+        where: { id: requestId }
+      });
+
+    } else if (db) {
+      // Get the request details first
+      const timeOffRequest = db.prepare(`
+        SELECT * FROM time_off_requests 
+        WHERE id = ?
+      `).get(requestId);
+
+      if (!timeOffRequest) {
+        return NextResponse.json({ error: 'Time off request not found' }, { status: 404 });
+      }
+
+      // If the request was approved, we need to restore the balance
+      if (timeOffRequest.status === 'APPROVED') {
+        const currentYear = new Date().getFullYear();
+        const userBalance = db.prepare(`
+          SELECT * FROM time_off_balances 
+          WHERE user_id = ? AND year = ?
+        `).get(timeOffRequest.user_id, currentYear);
+
+        if (userBalance) {
+          // Calculate the number of days to restore
+          const startDate = new Date(timeOffRequest.start_date);
+          const endDate = new Date(timeOffRequest.end_date);
+          const daysToRestore = calculateWorkingDays(startDate, endDate);
+
+          // Restore the appropriate balance based on request type
+          if (timeOffRequest.type === 'VACATION') {
+            db.prepare(`
+              UPDATE time_off_balances 
+              SET vacation_days = vacation_days + ? 
+              WHERE id = ?
+            `).run(daysToRestore, userBalance.id);
+          } else if (timeOffRequest.type === 'SICK') {
+            db.prepare(`
+              UPDATE time_off_balances 
+              SET sick_days = sick_days + ? 
+              WHERE id = ?
+            `).run(daysToRestore, userBalance.id);
+          } else if (timeOffRequest.type === 'PAID_LEAVE') {
+            db.prepare(`
+              UPDATE time_off_balances 
+              SET paid_leave = paid_leave + ? 
+              WHERE id = ?
+            `).run(daysToRestore, userBalance.id);
+          } else if (timeOffRequest.type === 'PERSONAL') {
+            db.prepare(`
+              UPDATE time_off_balances 
+              SET personal_days = personal_days + ? 
+              WHERE id = ?
+            `).run(daysToRestore, userBalance.id);
+          }
+        }
+      }
+
+      // Delete the request
+      db.prepare(`
+        DELETE FROM time_off_requests 
+        WHERE id = ?
+      `).run(requestId);
+    } else {
+      throw new Error("No database connection available");
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting time off request:', error);
+    return NextResponse.json(
+      { error: `Failed to delete time off request: ${error}` },
+      { status: 500 }
+    );
+  }
 } 
