@@ -14,8 +14,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString());
     const status = searchParams.get('status') || null;
+    const userId = searchParams.get('userId');
     
-    console.log("Fetching admin requests for year:", year, "status:", status);
+    console.log("Fetching admin requests for year:", year, "status:", status, "userId:", userId);
     console.log("DATABASE_URL:", process.env.DATABASE_URL);
     console.log("isPrismaEnabled:", isPrismaEnabled);
     console.log("Prisma client available:", !!prisma);
@@ -44,6 +45,10 @@ export async function GET(request: Request) {
       
       if (status) {
         whereClause.status = status;
+      }
+      
+      if (userId) {
+        whereClause.userId = userId;
       }
       
       const requests = await prisma?.timeOffRequest.findMany({
@@ -91,6 +96,11 @@ export async function GET(request: Request) {
       if (status) {
         query += ` AND r.status = ?`;
         params.push(status);
+      }
+      
+      if (userId) {
+        query += ` AND r.user_id = ?`;
+        params.push(userId);
       }
       
       query += ` ORDER BY r.start_date DESC`;
