@@ -169,6 +169,7 @@ export async function POST(req: NextRequest) {
     
     if (process.env.VERCEL || isPrismaEnabled) {
       debug('Using Prisma to create time off request');
+      
       // Create request in Postgres with Prisma
       const startDateObj = new Date(startDate);
       const endDateObj = new Date(endDate);
@@ -176,6 +177,9 @@ export async function POST(req: NextRequest) {
       // Set time components to ensure consistent date handling
       startDateObj.setHours(0, 0, 0, 0);
       endDateObj.setHours(23, 59, 59, 999);
+      
+      // Calculate working days
+      const workingDays = calculateWorkingDays(startDateObj, endDateObj);
       
       const request = await prisma?.timeOffRequest.create({
         data: {
@@ -185,6 +189,7 @@ export async function POST(req: NextRequest) {
           type,
           status: 'PENDING',
           reason: reason || null,
+          workingDays
         },
         include: {
           user: true
@@ -207,7 +212,6 @@ export async function POST(req: NextRequest) {
       
       // Calculate working days
       const workingDays = calculateWorkingDays(startDateObj, endDateObj);
-      debug('Working days calculated:', workingDays);
       
       const statement = db.prepare(`
         INSERT INTO time_off_requests (
@@ -216,7 +220,13 @@ export async function POST(req: NextRequest) {
       `);
       
       statement.run(
-        id, effectiveUserId, startDateObj.toISOString(), endDateObj.toISOString(), type, reason || null, workingDays
+        id, 
+        effectiveUserId, 
+        startDateObj.toISOString(), 
+        endDateObj.toISOString(), 
+        type, 
+        reason || null, 
+        workingDays
       );
       debug('SQLite request created with ID:', id);
     } else {

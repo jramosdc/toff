@@ -75,6 +75,7 @@ export async function GET(request: Request) {
         type: req.type,
         status: req.status,
         reason: req.reason,
+        working_days: req.workingDays,
         user_name: req.user.name,
         user_email: req.user.email
       }));

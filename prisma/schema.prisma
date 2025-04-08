@@ -98,18 +98,22 @@ model TimeOffBalance {
 }
 
 model TimeOffRequest {
-  id        String        @id @default(cuid())
-  userId    String        @map("user_id")
-  user      User          @relation(fields: [userId], references: [id])
-  startDate DateTime      @map("start_date")
-  endDate   DateTime      @map("end_date")
-  type      TimeOffType
-  status    RequestStatus @default(PENDING)
-  reason    String?
-  createdAt DateTime      @default(now()) @map("created_at")
-  updatedAt DateTime      @updatedAt @map("updated_at")
+  id          String   @id @default(uuid())
+  userId      String
+  startDate   DateTime
+  endDate     DateTime
+  type        TimeOffType
+  status      RequestStatus @default(PENDING)
+  reason      String?
+  workingDays Int
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  @@map("time_off_requests")
+  @@index([userId])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([status])
 }
 
 enum TimeOffType {
