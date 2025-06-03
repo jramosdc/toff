@@ -173,7 +173,7 @@ export async function PATCH(
           // Check if user has enough vacation days
           if (userBalance.vacationDays < daysRequested) {
             return NextResponse.json(
-              { error: 'Not enough vacation days available' },
+              { error: `Not enough vacation days available. Available: ${userBalance.vacationDays}, Requested: ${daysRequested}` },
               { status: 400 }
             );
           }
@@ -191,7 +191,7 @@ export async function PATCH(
           // Check if user has enough sick days
           if (userBalance.sickDays < daysRequested) {
             return NextResponse.json(
-              { error: 'Not enough sick days available' },
+              { error: `Not enough sick days available. Available: ${userBalance.sickDays}, Requested: ${daysRequested}` },
               { status: 400 }
             );
           }
@@ -209,7 +209,7 @@ export async function PATCH(
           // Check if user has enough paid leave
           if (userBalance.paidLeave < daysRequested) {
             return NextResponse.json(
-              { error: 'Not enough paid leave days available' },
+              { error: `Not enough paid leave days available. Available: ${userBalance.paidLeave}, Requested: ${daysRequested}` },
               { status: 400 }
             );
           }
@@ -226,7 +226,7 @@ export async function PATCH(
           // Check if user has enough personal days
           if (userBalance.personalDays < daysRequested) {
             return NextResponse.json(
-              { error: 'Not enough personal days available' },
+              { error: `Not enough personal days available. Available: ${userBalance.personalDays}, Requested: ${daysRequested}` },
               { status: 400 }
             );
           }
@@ -250,43 +250,62 @@ export async function PATCH(
         data: { status },
       });
       
-      console.log("Request updated successfully:", updatedRequest);
+      // Get the final updated request with user info for email
+      const finalRequest = await prisma?.timeOffRequest.findUnique({
+        where: { id: requestId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            }
+          }
+        }
+      });
+      
+      console.log("Request updated successfully:", finalRequest);
       
       // Send email notification if the status is updated by an admin
-      if (session.user.role === 'ADMIN' && existingRequest.status !== status && existingRequest.user) {
-        const user = existingRequest.user;
+      if (session.user.role === 'ADMIN' && existingRequest.status !== status && finalRequest?.user) {
+        const user = finalRequest.user;
         
-        if (status === 'APPROVED') {
-          await sendTimeOffRequestApprovedEmail(
-            user.email,
-            user.name,
-            existingRequest.startDate.toISOString(),
-            existingRequest.endDate.toISOString(),
-            existingRequest.type
-          );
-          console.log("Approval email sent to:", user.email);
-        } else if (status === 'REJECTED') {
-          await sendTimeOffRequestRejectedEmail(
-            user.email,
-            user.name,
-            existingRequest.startDate.toISOString(),
-            existingRequest.endDate.toISOString(),
-            existingRequest.type,
-            body.reason || undefined
-          );
-          console.log("Rejection email sent to:", user.email);
+        try {
+          if (status === 'APPROVED') {
+            await sendTimeOffRequestApprovedEmail(
+              user.email,
+              user.name,
+              existingRequest.startDate.toISOString(),
+              existingRequest.endDate.toISOString(),
+              existingRequest.type
+            );
+            console.log("Approval email sent to:", user.email);
+          } else if (status === 'REJECTED') {
+            await sendTimeOffRequestRejectedEmail(
+              user.email,
+              user.name,
+              existingRequest.startDate.toISOString(),
+              existingRequest.endDate.toISOString(),
+              existingRequest.type,
+              body.reason || undefined
+            );
+            console.log("Rejection email sent to:", user.email);
+          }
+        } catch (emailError) {
+          console.error("Failed to send status notification email:", emailError);
+          // Don't fail the request if email fails
         }
       }
       
       // Transform to match expected format
       const formattedRequest = {
-        id: updatedRequest?.id,
-        user_id: updatedRequest?.userId,
-        start_date: updatedRequest?.startDate.toISOString(),
-        end_date: updatedRequest?.endDate.toISOString(),
-        type: updatedRequest?.type,
-        status: updatedRequest?.status,
-        reason: updatedRequest?.reason
+        id: finalRequest?.id,
+        user_id: finalRequest?.userId,
+        start_date: finalRequest?.startDate.toISOString(),
+        end_date: finalRequest?.endDate.toISOString(),
+        type: finalRequest?.type,
+        status: finalRequest?.status,
+        reason: finalRequest?.reason
       };
       
       return NextResponse.json(formattedRequest);

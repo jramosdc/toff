@@ -43,6 +43,7 @@ export default function AllRequestsPage() {
   const [error, setError] = useState('');
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -66,8 +67,10 @@ export default function AllRequestsPage() {
       if (response.ok) {
         const data = await response.json();
         setRequests(data);
+        setError(''); // Clear any previous errors
       } else {
-        setError('Failed to fetch requests');
+        const errorText = await response.text();
+        setError(`Failed to fetch requests: ${errorText}`);
       }
     } catch (err) {
       setError('An error occurred while fetching data');
@@ -78,6 +81,19 @@ export default function AllRequestsPage() {
   };
 
   const updateRequestStatus = async (requestId: string, newStatus: 'PENDING' | 'APPROVED' | 'REJECTED') => {
+    // Add to processing set to show loading state
+    setProcessingRequests(prev => new Set(prev).add(requestId));
+    
+    // Optimistic update - immediately update UI
+    const originalRequests = [...requests];
+    setRequests(prevRequests => 
+      prevRequests.map(request => 
+        request.id === requestId 
+          ? { ...request, status: newStatus } 
+          : request
+      )
+    );
+
     try {
       const response = await fetch(`/api/time-off/requests/${requestId}`, {
         method: 'PATCH',
@@ -85,21 +101,37 @@ export default function AllRequestsPage() {
         body: JSON.stringify({ status: newStatus }),
       });
 
-      if (response.ok) {
-        // Update the local state with proper typing
-        setRequests(prevRequests => 
-          prevRequests.map(request => 
-            request.id === requestId 
-              ? { ...request, status: newStatus } 
-              : request
-          )
-        );
-      } else {
-        setError('Failed to update request status');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update request status');
       }
+
+      // Clear any previous errors on success
+      setError('');
+      
+      // Show success message briefly
+      const successMessage = `Request ${newStatus.toLowerCase()} successfully!`;
+      setError(successMessage);
+      setTimeout(() => {
+        if (error === successMessage) {
+          setError('');
+        }
+      }, 3000);
+
     } catch (err) {
-      setError('An error occurred while updating request');
-      console.error(err);
+      // Revert optimistic update on error
+      setRequests(originalRequests);
+      
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred while updating request';
+      setError(errorMessage);
+      console.error('Error updating request:', err);
+    } finally {
+      // Remove from processing set
+      setProcessingRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(requestId);
+        return newSet;
+      });
     }
   };
 
@@ -127,7 +159,11 @@ export default function AllRequestsPage() {
         </div>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className={`border px-4 py-3 rounded mb-4 ${
+            error.includes('successfully') 
+              ? 'bg-green-100 border-green-400 text-green-700'
+              : 'bg-red-100 border-red-400 text-red-700'
+          }`}>
             {error}
           </div>
         )}
@@ -251,15 +287,25 @@ export default function AllRequestsPage() {
                           <>
                             <button
                               onClick={() => updateRequestStatus(request.id, 'APPROVED')}
-                              className="text-green-600 hover:text-green-900 mr-4"
+                              disabled={processingRequests.has(request.id)}
+                              className={`mr-4 ${
+                                processingRequests.has(request.id)
+                                  ? 'text-gray-400 cursor-not-allowed'
+                                  : 'text-green-600 hover:text-green-900'
+                              }`}
                             >
-                              Approve
+                              {processingRequests.has(request.id) ? 'Processing...' : 'Approve'}
                             </button>
                             <button
                               onClick={() => updateRequestStatus(request.id, 'REJECTED')}
-                              className="text-red-600 hover:text-red-900"
+                              disabled={processingRequests.has(request.id)}
+                              className={`${
+                                processingRequests.has(request.id)
+                                  ? 'text-gray-400 cursor-not-allowed'
+                                  : 'text-red-600 hover:text-red-900'
+                              }`}
                             >
-                              Reject
+                              {processingRequests.has(request.id) ? 'Processing...' : 'Reject'}
                             </button>
                           </>
                         )}

@@ -259,16 +259,20 @@ export async function POST(req: NextRequest) {
         
         for (const admin of adminUsers || []) {
           if (admin.email && typeof sendTimeOffRequestAdminNotification === 'function') {
-            await sendTimeOffRequestAdminNotification(
-              admin.email,
-              userName,
-              startDate,
-              endDate,
-              type,
-              id,
-              reason
-            );
-            debug("Sent admin notification to:", admin.email);
+            try {
+              await sendTimeOffRequestAdminNotification(
+                admin.email,
+                userName,
+                startDate,
+                endDate,
+                type,
+                id,
+                reason
+              );
+              debug("Sent admin notification to:", admin.email);
+            } catch (emailError) {
+              console.error(`Failed to send email to admin ${admin.email}:`, emailError);
+            }
           }
         }
       } else if (db) {
@@ -281,16 +285,20 @@ export async function POST(req: NextRequest) {
         
         for (const admin of admins) {
           if (admin.email && typeof sendTimeOffRequestAdminNotification === 'function') {
-            await sendTimeOffRequestAdminNotification(
-              admin.email,
-              userName,
-              startDate,
-              endDate,
-              type,
-              id,
-              reason
-            );
-            debug("Sent admin notification to:", admin.email);
+            try {
+              await sendTimeOffRequestAdminNotification(
+                admin.email,
+                userName,
+                startDate,
+                endDate,
+                type,
+                id,
+                reason
+              );
+              debug("Sent admin notification to:", admin.email);
+            } catch (emailError) {
+              console.error(`Failed to send email to admin ${admin.email}:`, emailError);
+            }
           }
         }
       }
