@@ -206,7 +206,11 @@ export async function PATCH(
         try {
           // Use raw SQL to handle both schema types
           // First, try to find a balance record for this specific type (new schema)
-          const newSchemaBalance = await prisma?.$queryRaw<Array<{
+          if (!prisma) {
+            throw new Error("Prisma client not available");
+          }
+          
+          const newSchemaBalance = await prisma.$queryRaw<Array<{
             id: string;
             totalDays: number;
             usedDays: number;
@@ -245,7 +249,7 @@ export async function PATCH(
             }
             
             // Update using raw SQL
-            await prisma?.$executeRaw`
+            await prisma.$executeRaw`
               UPDATE "TimeOffBalance" 
               SET "usedDays" = ${newUsedDays}, "remainingDays" = ${newRemainingDays}, "updatedAt" = NOW()
               WHERE id = ${balance.id}
@@ -255,7 +259,7 @@ export async function PATCH(
             
           } else {
             // Try old schema format
-            const oldSchemaBalance = await prisma?.$queryRaw<Array<{
+            const oldSchemaBalance = await prisma.$queryRaw<Array<{
               id: string;
               vacationDays: number;
               sickDays: number;
@@ -316,7 +320,7 @@ export async function PATCH(
             const newBalance = availableDays - daysRequested;
             
             // Update using raw SQL with dynamic field name
-            await prisma?.$executeRaw`
+            await prisma.$executeRaw`
               UPDATE "TimeOffBalance" 
               SET "${updateField}" = ${newBalance}, "updatedAt" = NOW()
               WHERE id = ${balance.id}
@@ -490,7 +494,11 @@ export async function PATCH(
         try {
           // Use raw SQL to handle both schema types
           // First, try to find a balance record for this specific type (new schema)
-          const newSchemaBalance = await prisma?.$queryRaw<Array<{
+          if (!prisma) {
+            throw new Error("Prisma client not available");
+          }
+          
+          const newSchemaBalance = await prisma.$queryRaw<Array<{
             id: string;
             totalDays: number;
             usedDays: number;
@@ -529,7 +537,7 @@ export async function PATCH(
             }
             
             // Update using raw SQL
-            await prisma?.$executeRaw`
+            await prisma.$executeRaw`
               UPDATE "TimeOffBalance" 
               SET "usedDays" = ${newUsedDays}, "remainingDays" = ${newRemainingDays}, "updatedAt" = NOW()
               WHERE id = ${balance.id}
@@ -539,7 +547,7 @@ export async function PATCH(
             
           } else {
             // Try old schema format
-            const oldSchemaBalance = await prisma?.$queryRaw<Array<{
+            const oldSchemaBalance = await prisma.$queryRaw<Array<{
               id: string;
               vacationDays: number;
               sickDays: number;
@@ -600,7 +608,7 @@ export async function PATCH(
             const newBalance = availableDays - daysRequested;
             
             // Update using raw SQL with dynamic field name
-            await prisma?.$executeRaw`
+            await prisma.$executeRaw`
               UPDATE "TimeOffBalance" 
               SET "${updateField}" = ${newBalance}, "updatedAt" = NOW()
               WHERE id = ${balance.id}
