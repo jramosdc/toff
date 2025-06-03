@@ -34,6 +34,7 @@ db.exec(`
     vacation_days INTEGER DEFAULT 0,
     sick_days INTEGER DEFAULT 0,
     paid_leave INTEGER DEFAULT 0,
+    personal_days INTEGER DEFAULT 3,
     year INTEGER NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -119,26 +120,26 @@ const user4Id = createTestUser('alice@example.com', 'Alice Williams');
 const user5Id = createTestUser('manager@example.com', 'Michael Manager', 'MANAGER');
 
 // Create time off balances for all users
-const createTimeOffBalance = (userId, year, vacationDays, sickDays, paidLeave) => {
+const createTimeOffBalance = (userId, year, vacationDays, sickDays, paidLeave, personalDays = 3) => {
   const id = randomUUID();
   
   db.prepare(`
-    INSERT INTO time_off_balance (id, user_id, year, vacation_days, sick_days, paid_leave)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, userId, year, vacationDays, sickDays, paidLeave);
+    INSERT INTO time_off_balance (id, user_id, year, vacation_days, sick_days, paid_leave, personal_days)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, userId, year, vacationDays, sickDays, paidLeave, personalDays);
 };
 
 const currentYear = new Date().getFullYear();
 
 // Admin balance
-createTimeOffBalance(adminId, currentYear, 25, 10, 5);
+createTimeOffBalance(adminId, currentYear, 25, 10, 5, 5);
 
 // Employee balances
-createTimeOffBalance(user1Id, currentYear, 22, 8, 3);
-createTimeOffBalance(user2Id, currentYear, 22, 8, 2);
-createTimeOffBalance(user3Id, currentYear, 22, 8, 0);
-createTimeOffBalance(user4Id, currentYear, 22, 8, 1);
-createTimeOffBalance(user5Id, currentYear, 25, 10, 5);
+createTimeOffBalance(user1Id, currentYear, 22, 8, 3, 3);
+createTimeOffBalance(user2Id, currentYear, 22, 8, 2, 3);
+createTimeOffBalance(user3Id, currentYear, 22, 8, 0, 3);
+createTimeOffBalance(user4Id, currentYear, 22, 8, 1, 3);
+createTimeOffBalance(user5Id, currentYear, 25, 10, 5, 5);
 
 console.log('Sample data created successfully.');
 

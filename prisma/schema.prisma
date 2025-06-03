@@ -1,11 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-// Added comment to trigger new migration for PERSONAL enum value - 2025-03-24
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -15,22 +7,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// NextAuth.js Models
 model Account {
   id                String  @id @default(cuid())
-  userId            String
   type              String
   provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerAccountId String
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId])
@@ -39,9 +29,9 @@ model Account {
 
 model Session {
   id           String   @id @default(cuid())
+  expires      DateTime
   sessionToken String   @unique
   userId       String
-  expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -57,25 +47,19 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-enum UserRole {
-  ADMIN
-  MANAGER
-  EMPLOYEE
-}
-
 model User {
-  id                String           @id @default(uuid())
-  email             String           @unique
-  name              String
-  password          String?
-  role              UserRole         @default(EMPLOYEE)
-  timeOffRequests   TimeOffRequest[]
-  timeOffBalances   TimeOffBalance[]
-  auditLogs         AuditLog[]
-  accounts          Account[]
-  sessions          Session[]
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id              String           @id @default(uuid())
+  email           String           @unique
+  name            String
+  role            UserRole         @default(EMPLOYEE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  password        String?
+  auditLogs       AuditLog[]
+  timeOffBalances TimeOffBalance[]
+  timeOffRequests TimeOffRequest[]
+  accounts        Account[]
+  sessions        Session[]
 
   @@index([email])
   @@index([role])
@@ -111,24 +95,11 @@ model TimeOffRequest {
   updatedAt   DateTime      @updatedAt
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, startDate, endDate, type], name: "unique_request_per_period")
   @@index([userId])
   @@index([startDate, endDate])
   @@index([status])
   @@index([type])
-  @@unique([userId, startDate, endDate, type], name: "unique_request_per_period")
-}
-
-enum TimeOffType {
-  VACATION
-  SICK
-  PERSONAL
-  PAID_LEAVE
-}
-
-enum RequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
 }
 
 model AuditLog {
@@ -145,4 +116,23 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@index([action])
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum TimeOffType {
+  VACATION
+  SICK
+  PAID_LEAVE
+  PERSONAL
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
