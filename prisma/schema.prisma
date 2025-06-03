@@ -67,6 +67,7 @@ model User {
   id                String           @id @default(uuid())
   email             String           @unique
   name              String
+  password          String?
   role              UserRole         @default(EMPLOYEE)
   timeOffRequests   TimeOffRequest[]
   timeOffBalances   TimeOffBalance[]
