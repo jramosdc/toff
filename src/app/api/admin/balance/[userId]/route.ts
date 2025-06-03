@@ -121,7 +121,7 @@ export async function GET(
         for (const defaultBalance of defaultBalances) {
           await prisma.$executeRaw`
             INSERT INTO "TimeOffBalance" ("id", "userId", "year", "type", "totalDays", "usedDays", "remainingDays", "createdAt", "updatedAt")
-            VALUES (${randomUUID()}, ${userId}, ${year}, ${defaultBalance.type}, ${defaultBalance.totalDays}, 0, ${defaultBalance.totalDays}, NOW(), NOW())
+            VALUES (${randomUUID()}, ${userId}, ${year}, ${defaultBalance.type}::"TimeOffType", ${defaultBalance.totalDays}, 0, ${defaultBalance.totalDays}, NOW(), NOW())
           `;
         }
       }
@@ -240,7 +240,7 @@ export async function PUT(
         // Check if balance exists
         const existing = await prisma.$queryRaw<ModernTimeOffBalance[]>`
           SELECT * FROM "TimeOffBalance" 
-          WHERE "userId" = ${userId} AND "year" = ${currentYear} AND "type" = ${update.type}
+          WHERE "userId" = ${userId} AND "year" = ${currentYear} AND "type" = ${update.type}::"TimeOffType"
           LIMIT 1
         `;
         
@@ -251,13 +251,13 @@ export async function PUT(
             SET "totalDays" = ${update.totalDays}, 
                 "remainingDays" = ${update.totalDays} - "usedDays",
                 "updatedAt" = NOW()
-            WHERE "userId" = ${userId} AND "year" = ${currentYear} AND "type" = ${update.type}
+            WHERE "userId" = ${userId} AND "year" = ${currentYear} AND "type" = ${update.type}::"TimeOffType"
           `;
         } else {
           // Create new balance
           await prisma.$executeRaw`
             INSERT INTO "TimeOffBalance" ("id", "userId", "year", "type", "totalDays", "usedDays", "remainingDays", "createdAt", "updatedAt")
-            VALUES (${randomUUID()}, ${userId}, ${currentYear}, ${update.type}, ${update.totalDays}, 0, ${update.totalDays}, NOW(), NOW())
+            VALUES (${randomUUID()}, ${userId}, ${currentYear}, ${update.type}::"TimeOffType", ${update.totalDays}, 0, ${update.totalDays}, NOW(), NOW())
           `;
         }
       }
