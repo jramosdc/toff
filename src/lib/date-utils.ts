@@ -2,6 +2,7 @@
  * Utility functions for date operations and calculations
  */
 
+import { addDays, isWeekend, isSameDay, differenceInDays } from 'date-fns';
 /**
  * Checks if a date is a US federal holiday or a company holiday in 2025
  * @param date Date to check
