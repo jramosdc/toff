@@ -187,21 +187,6 @@ export async function PATCH(
         console.log("No overlapping approved requests found - proceeding with approval");
         const currentYear = new Date().getFullYear();
         
-        // Get the user's current time off balance
-        const userBalance = await prisma?.timeOffBalance.findFirst({
-          where: {
-            userId: existingRequest.userId,
-            year: currentYear
-          }
-        });
-        
-        if (!userBalance) {
-          return NextResponse.json(
-            { error: 'User time off balance not found' },
-            { status: 404 }
-          );
-        }
-        
         // Calculate the number of days for this time off request
         const startDate = new Date(existingRequest.startDate);
         const endDate = new Date(existingRequest.endDate);
@@ -218,123 +203,134 @@ export async function PATCH(
           );
         }
         
-        // Determine which balance to update based on request type
-        let updatedBalance;
-        
-        if (existingRequest.type === 'VACATION') {
-          // Check if user has enough vacation days
-          if (isNaN(userBalance.vacationDays) || userBalance.vacationDays < daysRequested) {
-            console.error("Invalid vacation balance or insufficient days:", userBalance.vacationDays, "requested:", daysRequested);
-            return NextResponse.json(
-              { error: `Not enough vacation days available. Available: ${userBalance.vacationDays}, Requested: ${daysRequested}` },
-              { status: 400 }
-            );
-          }
+        try {
+          // Use raw SQL to handle both schema types
+          // First, try to find a balance record for this specific type (new schema)
+          const newSchemaBalance = await prisma?.$queryRaw<Array<{
+            id: string;
+            totalDays: number;
+            usedDays: number;
+            remainingDays: number;
+          }>>`
+            SELECT id, "totalDays", "usedDays", "remainingDays" 
+            FROM "TimeOffBalance" 
+            WHERE "userId" = ${existingRequest.userId} 
+            AND year = ${currentYear} 
+            AND type = ${existingRequest.type}::"TimeOffType"
+            LIMIT 1
+          `;
           
-          const newVacationDays = userBalance.vacationDays - daysRequested;
-          if (isNaN(newVacationDays)) {
-            console.error("Calculation resulted in NaN:", userBalance.vacationDays, "-", daysRequested);
-            return NextResponse.json(
-              { error: 'Calculation error when updating vacation days.' },
-              { status: 500 }
-            );
-          }
-          
-          // Deduct from vacation balance
-          updatedBalance = await prisma?.timeOffBalance.update({
-            where: { id: userBalance.id },
-            data: { 
-              vacationDays: newVacationDays
+          if (newSchemaBalance && newSchemaBalance.length > 0) {
+            // New schema logic
+            const balance = newSchemaBalance[0];
+            console.log("Using new schema - User balance for", existingRequest.type, ":", balance);
+            
+            if (isNaN(balance.remainingDays) || balance.remainingDays < daysRequested) {
+              console.error("Invalid balance or insufficient days:", balance.remainingDays, "requested:", daysRequested);
+              return NextResponse.json(
+                { error: `Not enough ${existingRequest.type.toLowerCase().replace('_', ' ')} days available. Available: ${balance.remainingDays}, Requested: ${daysRequested}` },
+                { status: 400 }
+              );
             }
-          });
-          console.log(`Deducted ${daysRequested} vacation days from balance. New balance: ${newVacationDays}`);
-          
-        } else if (existingRequest.type === 'SICK') {
-          // Check if user has enough sick days
-          if (isNaN(userBalance.sickDays) || userBalance.sickDays < daysRequested) {
-            console.error("Invalid sick balance or insufficient days:", userBalance.sickDays, "requested:", daysRequested);
-            return NextResponse.json(
-              { error: `Not enough sick days available. Available: ${userBalance.sickDays}, Requested: ${daysRequested}` },
-              { status: 400 }
-            );
-          }
-          
-          const newSickDays = userBalance.sickDays - daysRequested;
-          if (isNaN(newSickDays)) {
-            console.error("Calculation resulted in NaN:", userBalance.sickDays, "-", daysRequested);
-            return NextResponse.json(
-              { error: 'Calculation error when updating sick days.' },
-              { status: 500 }
-            );
-          }
-          
-          // Deduct from sick days balance
-          updatedBalance = await prisma?.timeOffBalance.update({
-            where: { id: userBalance.id },
-            data: { 
-              sickDays: newSickDays
+            
+            const newUsedDays = balance.usedDays + daysRequested;
+            const newRemainingDays = balance.remainingDays - daysRequested;
+            
+            if (isNaN(newUsedDays) || isNaN(newRemainingDays)) {
+              console.error("Calculation resulted in NaN:", balance.usedDays, "+", daysRequested, "or", balance.remainingDays, "-", daysRequested);
+              return NextResponse.json(
+                { error: 'Calculation error when updating balance.' },
+                { status: 500 }
+              );
             }
-          });
-          console.log(`Deducted ${daysRequested} sick days from balance. New balance: ${newSickDays}`);
-          
-        } else if (existingRequest.type === 'PAID_LEAVE') {
-          // Check if user has enough paid leave
-          if (isNaN(userBalance.paidLeave) || userBalance.paidLeave < daysRequested) {
-            console.error("Invalid paid leave balance or insufficient days:", userBalance.paidLeave, "requested:", daysRequested);
-            return NextResponse.json(
-              { error: `Not enough paid leave days available. Available: ${userBalance.paidLeave}, Requested: ${daysRequested}` },
-              { status: 400 }
-            );
-          }
-          
-          const newPaidLeave = userBalance.paidLeave - daysRequested;
-          if (isNaN(newPaidLeave)) {
-            console.error("Calculation resulted in NaN:", userBalance.paidLeave, "-", daysRequested);
-            return NextResponse.json(
-              { error: 'Calculation error when updating paid leave days.' },
-              { status: 500 }
-            );
-          }
-          
-          // Deduct from paid leave balance
-          updatedBalance = await prisma?.timeOffBalance.update({
-            where: { id: userBalance.id },
-            data: { 
-              paidLeave: newPaidLeave
+            
+            // Update using raw SQL
+            await prisma?.$executeRaw`
+              UPDATE "TimeOffBalance" 
+              SET "usedDays" = ${newUsedDays}, "remainingDays" = ${newRemainingDays}, "updatedAt" = NOW()
+              WHERE id = ${balance.id}
+            `;
+            
+            console.log(`Deducted ${daysRequested} ${existingRequest.type.toLowerCase().replace('_', ' ')} days from balance. New remaining: ${newRemainingDays}, Used: ${newUsedDays}`);
+            
+          } else {
+            // Try old schema format
+            const oldSchemaBalance = await prisma?.$queryRaw<Array<{
+              id: string;
+              vacationDays: number;
+              sickDays: number;
+              paidLeave: number;
+              personalDays: number;
+            }>>`
+              SELECT id, "vacationDays", "sickDays", "paidLeave", "personalDays"
+              FROM "TimeOffBalance" 
+              WHERE "userId" = ${existingRequest.userId} 
+              AND year = ${currentYear}
+              LIMIT 1
+            `;
+            
+            if (!oldSchemaBalance || oldSchemaBalance.length === 0) {
+              return NextResponse.json(
+                { error: 'User time off balance not found' },
+                { status: 404 }
+              );
             }
-          });
-          console.log(`Deducted ${daysRequested} paid leave days from balance. New balance: ${newPaidLeave}`);
-          
-        } else if (existingRequest.type === 'PERSONAL') {
-          // Check if user has enough personal days
-          if (isNaN(userBalance.personalDays) || userBalance.personalDays < daysRequested) {
-            console.error("Invalid personal days balance or insufficient days:", userBalance.personalDays, "requested:", daysRequested);
-            return NextResponse.json(
-              { error: `Not enough personal days available. Available: ${userBalance.personalDays}, Requested: ${daysRequested}` },
-              { status: 400 }
-            );
-          }
-          
-          const newPersonalDays = userBalance.personalDays - daysRequested;
-          if (isNaN(newPersonalDays)) {
-            console.error("Calculation resulted in NaN:", userBalance.personalDays, "-", daysRequested);
-            return NextResponse.json(
-              { error: 'Calculation error when updating personal days.' },
-              { status: 500 }
-            );
-          }
-          
-          // Deduct from personal days balance
-          updatedBalance = await prisma?.timeOffBalance.update({
-            where: { id: userBalance.id },
-            data: { 
-              personalDays: newPersonalDays
+            
+            const balance = oldSchemaBalance[0];
+            console.log("Using old schema - User balance:", balance);
+            
+            let availableDays: number;
+            let updateField: string;
+            
+            switch (existingRequest.type) {
+              case 'VACATION':
+                availableDays = balance.vacationDays || 0;
+                updateField = 'vacationDays';
+                break;
+              case 'SICK':
+                availableDays = balance.sickDays || 0;
+                updateField = 'sickDays';
+                break;
+              case 'PAID_LEAVE':
+                availableDays = balance.paidLeave || 0;
+                updateField = 'paidLeave';
+                break;
+              case 'PERSONAL':
+                availableDays = balance.personalDays || 0;
+                updateField = 'personalDays';
+                break;
+              default:
+                return NextResponse.json(
+                  { error: 'Invalid time off type' },
+                  { status: 400 }
+                );
             }
-          });
-          console.log(`Deducted ${daysRequested} personal days from balance. New balance: ${newPersonalDays}`);
+            
+            if (isNaN(availableDays) || availableDays < daysRequested) {
+              return NextResponse.json(
+                { error: `Not enough ${existingRequest.type.toLowerCase().replace('_', ' ')} days available. Available: ${availableDays}, Requested: ${daysRequested}` },
+                { status: 400 }
+              );
+            }
+            
+            const newBalance = availableDays - daysRequested;
+            
+            // Update using raw SQL with dynamic field name
+            await prisma?.$executeRaw`
+              UPDATE "TimeOffBalance" 
+              SET "${updateField}" = ${newBalance}, "updatedAt" = NOW()
+              WHERE id = ${balance.id}
+            `;
+            
+            console.log(`Deducted ${daysRequested} ${existingRequest.type.toLowerCase().replace('_', ' ')} days from balance. New balance: ${newBalance}`);
+          }
+        } catch (error) {
+          console.error("Error updating balance:", error);
+          return NextResponse.json(
+            { error: 'Failed to update time off balance' },
+            { status: 500 }
+          );
         }
-        
-        console.log("Updated balance:", updatedBalance);
       }
       
       // Update the request status
@@ -475,26 +471,6 @@ export async function PATCH(
         console.log("No overlapping approved requests found - proceeding with approval");
         const currentYear = new Date().getFullYear();
         
-        // Get the user's current time off balance
-        const userBalance = db.prepare(
-          'SELECT * FROM time_off_balances WHERE user_id = ? AND year = ?'
-        ).get(existingRequest.user_id, currentYear) as {
-          id: string;
-          user_id: string;
-          vacation_days: number;
-          sick_days: number;
-          paid_leave: number;
-          personal_days: number;
-          year: number;
-        } | undefined;
-        
-        if (!userBalance) {
-          return NextResponse.json(
-            { error: 'User time off balance not found' },
-            { status: 404 }
-          );
-        }
-        
         // Calculate the number of days for this time off request
         const startDate = new Date(existingRequest.start_date);
         const endDate = new Date(existingRequest.end_date);
@@ -511,69 +487,133 @@ export async function PATCH(
           );
         }
         
-        // Update the appropriate balance based on request type
-        if (existingRequest.type === 'VACATION') {
-          // Check if user has enough vacation days
-          if (isNaN(userBalance.vacation_days) || userBalance.vacation_days < daysRequested) {
-            console.error("Invalid vacation balance or insufficient days:", userBalance.vacation_days, "requested:", daysRequested);
-            return NextResponse.json(
-              { error: 'Not enough vacation days available' },
-              { status: 400 }
-            );
+        try {
+          // Use raw SQL to handle both schema types
+          // First, try to find a balance record for this specific type (new schema)
+          const newSchemaBalance = await prisma?.$queryRaw<Array<{
+            id: string;
+            totalDays: number;
+            usedDays: number;
+            remainingDays: number;
+          }>>`
+            SELECT id, "totalDays", "usedDays", "remainingDays" 
+            FROM "TimeOffBalance" 
+            WHERE "userId" = ${existingRequest.user_id} 
+            AND year = ${currentYear} 
+            AND type = ${existingRequest.type}::"TimeOffType"
+            LIMIT 1
+          `;
+          
+          if (newSchemaBalance && newSchemaBalance.length > 0) {
+            // New schema logic
+            const balance = newSchemaBalance[0];
+            console.log("Using new schema - User balance for", existingRequest.type, ":", balance);
+            
+            if (isNaN(balance.remainingDays) || balance.remainingDays < daysRequested) {
+              console.error("Invalid balance or insufficient days:", balance.remainingDays, "requested:", daysRequested);
+              return NextResponse.json(
+                { error: `Not enough ${existingRequest.type.toLowerCase().replace('_', ' ')} days available. Available: ${balance.remainingDays}, Requested: ${daysRequested}` },
+                { status: 400 }
+              );
+            }
+            
+            const newUsedDays = balance.usedDays + daysRequested;
+            const newRemainingDays = balance.remainingDays - daysRequested;
+            
+            if (isNaN(newUsedDays) || isNaN(newRemainingDays)) {
+              console.error("Calculation resulted in NaN:", balance.usedDays, "+", daysRequested, "or", balance.remainingDays, "-", daysRequested);
+              return NextResponse.json(
+                { error: 'Calculation error when updating balance.' },
+                { status: 500 }
+              );
+            }
+            
+            // Update using raw SQL
+            await prisma?.$executeRaw`
+              UPDATE "TimeOffBalance" 
+              SET "usedDays" = ${newUsedDays}, "remainingDays" = ${newRemainingDays}, "updatedAt" = NOW()
+              WHERE id = ${balance.id}
+            `;
+            
+            console.log(`Deducted ${daysRequested} ${existingRequest.type.toLowerCase().replace('_', ' ')} days from balance. New remaining: ${newRemainingDays}, Used: ${newUsedDays}`);
+            
+          } else {
+            // Try old schema format
+            const oldSchemaBalance = await prisma?.$queryRaw<Array<{
+              id: string;
+              vacationDays: number;
+              sickDays: number;
+              paidLeave: number;
+              personalDays: number;
+            }>>`
+              SELECT id, "vacationDays", "sickDays", "paidLeave", "personalDays"
+              FROM "TimeOffBalance" 
+              WHERE "userId" = ${existingRequest.user_id} 
+              AND year = ${currentYear}
+              LIMIT 1
+            `;
+            
+            if (!oldSchemaBalance || oldSchemaBalance.length === 0) {
+              return NextResponse.json(
+                { error: 'User time off balance not found' },
+                { status: 404 }
+              );
+            }
+            
+            const balance = oldSchemaBalance[0];
+            console.log("Using old schema - User balance:", balance);
+            
+            let availableDays: number;
+            let updateField: string;
+            
+            switch (existingRequest.type) {
+              case 'VACATION':
+                availableDays = balance.vacationDays || 0;
+                updateField = 'vacationDays';
+                break;
+              case 'SICK':
+                availableDays = balance.sickDays || 0;
+                updateField = 'sickDays';
+                break;
+              case 'PAID_LEAVE':
+                availableDays = balance.paidLeave || 0;
+                updateField = 'paidLeave';
+                break;
+              case 'PERSONAL':
+                availableDays = balance.personalDays || 0;
+                updateField = 'personalDays';
+                break;
+              default:
+                return NextResponse.json(
+                  { error: 'Invalid time off type' },
+                  { status: 400 }
+                );
+            }
+            
+            if (isNaN(availableDays) || availableDays < daysRequested) {
+              return NextResponse.json(
+                { error: `Not enough ${existingRequest.type.toLowerCase().replace('_', ' ')} days available. Available: ${availableDays}, Requested: ${daysRequested}` },
+                { status: 400 }
+              );
+            }
+            
+            const newBalance = availableDays - daysRequested;
+            
+            // Update using raw SQL with dynamic field name
+            await prisma?.$executeRaw`
+              UPDATE "TimeOffBalance" 
+              SET "${updateField}" = ${newBalance}, "updatedAt" = NOW()
+              WHERE id = ${balance.id}
+            `;
+            
+            console.log(`Deducted ${daysRequested} ${existingRequest.type.toLowerCase().replace('_', ' ')} days from balance. New balance: ${newBalance}`);
           }
-          
-          // Deduct from vacation balance
-          db.prepare(
-            'UPDATE time_off_balances SET vacation_days = vacation_days - ? WHERE id = ?'
-          ).run(daysRequested, userBalance.id);
-          console.log(`Deducted ${daysRequested} vacation days from balance`);
-          
-        } else if (existingRequest.type === 'SICK') {
-          // Check if user has enough sick days
-          if (isNaN(userBalance.sick_days) || userBalance.sick_days < daysRequested) {
-            console.error("Invalid sick balance or insufficient days:", userBalance.sick_days, "requested:", daysRequested);
-            return NextResponse.json(
-              { error: 'Not enough sick days available' },
-              { status: 400 }
-            );
-          }
-          
-          // Deduct from sick days balance
-          db.prepare(
-            'UPDATE time_off_balances SET sick_days = sick_days - ? WHERE id = ?'
-          ).run(daysRequested, userBalance.id);
-          console.log(`Deducted ${daysRequested} sick days from balance`);
-          
-        } else if (existingRequest.type === 'PAID_LEAVE') {
-          // Check if user has enough paid leave
-          if (isNaN(userBalance.paid_leave) || userBalance.paid_leave < daysRequested) {
-            console.error("Invalid paid leave balance or insufficient days:", userBalance.paid_leave, "requested:", daysRequested);
-            return NextResponse.json(
-              { error: 'Not enough paid leave days available' },
-              { status: 400 }
-            );
-          }
-          
-          // Deduct from paid leave balance
-          db.prepare(
-            'UPDATE time_off_balances SET paid_leave = paid_leave - ? WHERE id = ?'
-          ).run(daysRequested, userBalance.id);
-          console.log(`Deducted ${daysRequested} paid leave days from balance`);
-        } else if (existingRequest.type === 'PERSONAL') {
-          // Check if user has enough personal days
-          if (isNaN(userBalance.personal_days) || userBalance.personal_days < daysRequested) {
-            console.error("Invalid personal days balance or insufficient days:", userBalance.personal_days, "requested:", daysRequested);
-            return NextResponse.json(
-              { error: 'Not enough personal days available' },
-              { status: 400 }
-            );
-          }
-          
-          // Deduct from personal days balance
-          db.prepare(
-            'UPDATE time_off_balances SET personal_days = personal_days - ? WHERE id = ?'
-          ).run(daysRequested, userBalance.id);
-          console.log(`Deducted ${daysRequested} personal days from balance`);
+        } catch (error) {
+          console.error("Error updating balance:", error);
+          return NextResponse.json(
+            { error: 'Failed to update time off balance' },
+            { status: 500 }
+          );
         }
       }
 
