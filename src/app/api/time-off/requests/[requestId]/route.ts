@@ -141,7 +141,50 @@ export async function PATCH(
 
       // Process approval - only update balance if we're changing from PENDING to APPROVED
       if (status === 'APPROVED' && existingRequest.status !== 'APPROVED') {
-        console.log("Approving time off request - updating balance");
+        console.log("Approving time off request - checking for overlapping approved requests");
+        
+        // Check if there are any other APPROVED requests for the same user with overlapping dates
+        const overlappingApproved = await prisma?.timeOffRequest.findFirst({
+          where: {
+            userId: existingRequest.userId,
+            status: 'APPROVED',
+            id: { not: requestId }, // Exclude the current request
+            OR: [
+              {
+                // Case 1: Existing request starts within the new request period
+                startDate: {
+                  gte: existingRequest.startDate,
+                  lte: existingRequest.endDate
+                }
+              },
+              {
+                // Case 2: Existing request ends within the new request period
+                endDate: {
+                  gte: existingRequest.startDate,
+                  lte: existingRequest.endDate
+                }
+              },
+              {
+                // Case 3: Existing request completely encompasses the new request
+                AND: [
+                  { startDate: { lte: existingRequest.startDate } },
+                  { endDate: { gte: existingRequest.endDate } }
+                ]
+              }
+            ]
+          }
+        });
+        
+        if (overlappingApproved) {
+          return NextResponse.json(
+            { 
+              error: `Cannot approve this request. There is already an approved ${overlappingApproved.type.toLowerCase().replace('_', ' ')} request from ${overlappingApproved.startDate.toLocaleDateString()} to ${overlappingApproved.endDate.toLocaleDateString()} that overlaps with these dates.`
+            },
+            { status: 400 }
+          );
+        }
+        
+        console.log("No overlapping approved requests found - proceeding with approval");
         const currentYear = new Date().getFullYear();
         
         // Get the user's current time off balance
@@ -341,7 +384,45 @@ export async function PATCH(
 
       // Process approval - update balance if changing to approved
       if (status === 'APPROVED' && existingRequest.status !== 'APPROVED') {
-        console.log("Approving time off request - updating balance");
+        console.log("Approving time off request - checking for overlapping approved requests");
+        
+        // Check if there are any other APPROVED requests for the same user with overlapping dates
+        const overlappingApproved = db.prepare(`
+          SELECT * FROM time_off_requests 
+          WHERE user_id = ? AND status = 'APPROVED' AND id != ? AND
+          (
+            (start_date <= ? AND end_date >= ?) OR
+            (start_date <= ? AND end_date >= ?) OR  
+            (start_date >= ? AND start_date <= ?) OR
+            (end_date >= ? AND end_date <= ?)
+          )
+        `).all(
+          existingRequest.user_id, 
+          existingRequest.id, 
+          existingRequest.end_date, existingRequest.start_date,    // Existing request encompasses this one
+          existingRequest.start_date, existingRequest.end_date,    // This request encompasses existing one
+          existingRequest.start_date, existingRequest.end_date,    // Existing start overlaps
+          existingRequest.start_date, existingRequest.end_date     // Existing end overlaps
+        ) as Array<{
+          id: string;
+          user_id: string;
+          start_date: string;
+          end_date: string;
+          type: string;
+          status: string;
+        }>;
+        
+        if (overlappingApproved.length > 0) {
+          const conflictingRequest = overlappingApproved[0];
+          return NextResponse.json(
+            { 
+              error: `Cannot approve this request. There is already an approved ${conflictingRequest.type.toLowerCase().replace('_', ' ')} request from ${conflictingRequest.start_date.split('T')[0]} to ${conflictingRequest.end_date.split('T')[0]} that overlaps with these dates.`
+            },
+            { status: 400 }
+          );
+        }
+        
+        console.log("No overlapping approved requests found - proceeding with approval");
         const currentYear = new Date().getFullYear();
         
         // Get the user's current time off balance
