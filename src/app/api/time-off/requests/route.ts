@@ -178,27 +178,71 @@ export async function POST(req: NextRequest) {
       startDateObj.setHours(0, 0, 0, 0);
       endDateObj.setHours(23, 59, 59, 999);
       
-      // Calculate working days
-      const workingDays = calculateWorkingDays(startDateObj, endDateObj);
-      
-      const request = await prisma?.timeOffRequest.create({
-        data: {
+      // Check for existing request with same parameters
+      const existingRequest = await prisma?.timeOffRequest.findFirst({
+        where: {
           userId: effectiveUserId,
           startDate: startDateObj,
           endDate: endDateObj,
-          type,
-          status: 'PENDING',
-          reason: reason || null,
-          workingDays
-        },
-        include: {
-          user: true
+          type: type,
+          status: {
+            in: ['PENDING', 'APPROVED']  // Don't allow if there's already a pending or approved request
+          }
         }
       });
       
-      id = request?.id as string;
-      debug('Time off request created with ID:', id);
+      if (existingRequest) {
+        return NextResponse.json(
+          { 
+            error: `A ${type.toLowerCase().replace('_', ' ')} request for these dates already exists with status: ${existingRequest.status}. Please check your existing requests or modify the dates.` 
+          },
+          { status: 400 }
+        );
+      }
       
+      // Calculate working days
+      const workingDays = calculateWorkingDays(startDateObj, endDateObj);
+      
+      try {
+        const request = await prisma?.timeOffRequest.create({
+          data: {
+            userId: effectiveUserId,
+            startDate: startDateObj,
+            endDate: endDateObj,
+            type,
+            status: 'PENDING',
+            reason: reason || null,
+            workingDays
+          },
+          include: {
+            user: true
+          }
+        });
+        
+        id = request?.id as string;
+        debug('Time off request created with ID:', id);
+        
+      } catch (prismaError: any) {
+        console.error('Prisma error creating request:', prismaError);
+        
+        // Handle specific Prisma errors
+        if (prismaError.code === 'P2002') {
+          return NextResponse.json(
+            { 
+              error: `A ${type.toLowerCase().replace('_', ' ')} request for these exact dates already exists. Please check your existing requests or choose different dates.` 
+            },
+            { status: 400 }
+          );
+        }
+        
+        // Handle other Prisma errors
+        return NextResponse.json(
+          { 
+            error: `Failed to create time off request: ${prismaError.message || prismaError}` 
+          },
+          { status: 500 }
+        );
+      }
     } else if (db) {
       debug('Using SQLite to create time off request');
       // Create request in SQLite
@@ -210,25 +254,72 @@ export async function POST(req: NextRequest) {
       startDateObj.setHours(0, 0, 0, 0);
       endDateObj.setHours(23, 59, 59, 999);
       
-      // Calculate working days
-      const workingDays = calculateWorkingDays(startDateObj, endDateObj);
-      
-      const statement = db.prepare(`
-        INSERT INTO time_off_requests (
-          id, user_id, start_date, end_date, type, status, reason, working_days
-        ) VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?)
-      `);
-      
-      statement.run(
-        id, 
+      // Check for existing request with same parameters
+      const existingRequest = db.prepare(`
+        SELECT * FROM time_off_requests 
+        WHERE user_id = ? 
+        AND start_date = ? 
+        AND end_date = ? 
+        AND type = ? 
+        AND status IN ('PENDING', 'APPROVED')
+      `).get(
         effectiveUserId, 
         startDateObj.toISOString(), 
         endDateObj.toISOString(), 
-        type, 
-        reason || null, 
-        workingDays
+        type
       );
-      debug('SQLite request created with ID:', id);
+      
+      if (existingRequest) {
+        return NextResponse.json(
+          { 
+            error: `A ${type.toLowerCase().replace('_', ' ')} request for these dates already exists with status: ${existingRequest.status}. Please check your existing requests or modify the dates.` 
+          },
+          { status: 400 }
+        );
+      }
+      
+      // Calculate working days
+      const workingDays = calculateWorkingDays(startDateObj, endDateObj);
+      
+      try {
+        const statement = db.prepare(`
+          INSERT INTO time_off_requests (
+            id, user_id, start_date, end_date, type, status, reason, working_days
+          ) VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?)
+        `);
+        
+        statement.run(
+          id, 
+          effectiveUserId, 
+          startDateObj.toISOString(), 
+          endDateObj.toISOString(), 
+          type, 
+          reason || null, 
+          workingDays
+        );
+        debug('SQLite request created with ID:', id);
+        
+      } catch (sqliteError: any) {
+        console.error('SQLite error creating request:', sqliteError);
+        
+        // Handle SQLite unique constraint errors
+        if (sqliteError.message && sqliteError.message.includes('UNIQUE constraint failed')) {
+          return NextResponse.json(
+            { 
+              error: `A ${type.toLowerCase().replace('_', ' ')} request for these exact dates already exists. Please check your existing requests or choose different dates.` 
+            },
+            { status: 400 }
+          );
+        }
+        
+        // Handle other SQLite errors
+        return NextResponse.json(
+          { 
+            error: `Failed to create time off request: ${sqliteError.message || sqliteError}` 
+          },
+          { status: 500 }
+        );
+      }
     } else {
       throw new Error("No database connection available");
     }
