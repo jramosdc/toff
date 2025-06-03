@@ -434,6 +434,7 @@ export async function PATCH(
           vacation_days: number;
           sick_days: number;
           paid_leave: number;
+          personal_days: number;
           year: number;
         } | undefined;
         
