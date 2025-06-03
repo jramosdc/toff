@@ -100,14 +100,33 @@ export async function POST(request: Request) {
           name,
           password: hashedPassword,
           role: role || 'EMPLOYEE',
-          timeOffBalance: {
-            create: {
-              id: randomUUID(),
-              vacationDays: 22,
-              sickDays: 8,
-              paidLeave: 0,
-              year: currentYear
-            }
+          timeOffBalances: {
+            create: [
+              {
+                id: randomUUID(),
+                year: currentYear,
+                type: 'VACATION',
+                totalDays: 22,
+                usedDays: 0,
+                remainingDays: 22
+              },
+              {
+                id: randomUUID(),
+                year: currentYear,
+                type: 'SICK',
+                totalDays: 8,
+                usedDays: 0,
+                remainingDays: 8
+              },
+              {
+                id: randomUUID(),
+                year: currentYear,
+                type: 'PERSONAL',
+                totalDays: 5,
+                usedDays: 0,
+                remainingDays: 5
+              }
+            ]
           }
         },
         select: {
