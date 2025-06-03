@@ -209,15 +209,34 @@ export async function PATCH(
         
         console.log("Request from", startDate, "to", endDate, "equals", daysRequested, "working days");
         
+        // Validate the calculated days
+        if (isNaN(daysRequested) || daysRequested <= 0) {
+          console.error("Invalid days calculation:", daysRequested);
+          return NextResponse.json(
+            { error: 'Invalid date range or calculation error. Please check the request dates.' },
+            { status: 400 }
+          );
+        }
+        
         // Determine which balance to update based on request type
         let updatedBalance;
         
         if (existingRequest.type === 'VACATION') {
           // Check if user has enough vacation days
-          if (userBalance.vacationDays < daysRequested) {
+          if (isNaN(userBalance.vacationDays) || userBalance.vacationDays < daysRequested) {
+            console.error("Invalid vacation balance or insufficient days:", userBalance.vacationDays, "requested:", daysRequested);
             return NextResponse.json(
               { error: `Not enough vacation days available. Available: ${userBalance.vacationDays}, Requested: ${daysRequested}` },
               { status: 400 }
+            );
+          }
+          
+          const newVacationDays = userBalance.vacationDays - daysRequested;
+          if (isNaN(newVacationDays)) {
+            console.error("Calculation resulted in NaN:", userBalance.vacationDays, "-", daysRequested);
+            return NextResponse.json(
+              { error: 'Calculation error when updating vacation days.' },
+              { status: 500 }
             );
           }
           
@@ -225,17 +244,27 @@ export async function PATCH(
           updatedBalance = await prisma?.timeOffBalance.update({
             where: { id: userBalance.id },
             data: { 
-              vacationDays: userBalance.vacationDays - daysRequested 
+              vacationDays: newVacationDays
             }
           });
-          console.log(`Deducted ${daysRequested} vacation days from balance`);
+          console.log(`Deducted ${daysRequested} vacation days from balance. New balance: ${newVacationDays}`);
           
         } else if (existingRequest.type === 'SICK') {
           // Check if user has enough sick days
-          if (userBalance.sickDays < daysRequested) {
+          if (isNaN(userBalance.sickDays) || userBalance.sickDays < daysRequested) {
+            console.error("Invalid sick balance or insufficient days:", userBalance.sickDays, "requested:", daysRequested);
             return NextResponse.json(
               { error: `Not enough sick days available. Available: ${userBalance.sickDays}, Requested: ${daysRequested}` },
               { status: 400 }
+            );
+          }
+          
+          const newSickDays = userBalance.sickDays - daysRequested;
+          if (isNaN(newSickDays)) {
+            console.error("Calculation resulted in NaN:", userBalance.sickDays, "-", daysRequested);
+            return NextResponse.json(
+              { error: 'Calculation error when updating sick days.' },
+              { status: 500 }
             );
           }
           
@@ -243,17 +272,27 @@ export async function PATCH(
           updatedBalance = await prisma?.timeOffBalance.update({
             where: { id: userBalance.id },
             data: { 
-              sickDays: userBalance.sickDays - daysRequested 
+              sickDays: newSickDays
             }
           });
-          console.log(`Deducted ${daysRequested} sick days from balance`);
+          console.log(`Deducted ${daysRequested} sick days from balance. New balance: ${newSickDays}`);
           
         } else if (existingRequest.type === 'PAID_LEAVE') {
           // Check if user has enough paid leave
-          if (userBalance.paidLeave < daysRequested) {
+          if (isNaN(userBalance.paidLeave) || userBalance.paidLeave < daysRequested) {
+            console.error("Invalid paid leave balance or insufficient days:", userBalance.paidLeave, "requested:", daysRequested);
             return NextResponse.json(
               { error: `Not enough paid leave days available. Available: ${userBalance.paidLeave}, Requested: ${daysRequested}` },
               { status: 400 }
+            );
+          }
+          
+          const newPaidLeave = userBalance.paidLeave - daysRequested;
+          if (isNaN(newPaidLeave)) {
+            console.error("Calculation resulted in NaN:", userBalance.paidLeave, "-", daysRequested);
+            return NextResponse.json(
+              { error: 'Calculation error when updating paid leave days.' },
+              { status: 500 }
             );
           }
           
@@ -261,16 +300,27 @@ export async function PATCH(
           updatedBalance = await prisma?.timeOffBalance.update({
             where: { id: userBalance.id },
             data: { 
-              paidLeave: userBalance.paidLeave - daysRequested 
+              paidLeave: newPaidLeave
             }
           });
-          console.log(`Deducted ${daysRequested} paid leave days from balance`);
+          console.log(`Deducted ${daysRequested} paid leave days from balance. New balance: ${newPaidLeave}`);
+          
         } else if (existingRequest.type === 'PERSONAL') {
           // Check if user has enough personal days
-          if (userBalance.personalDays < daysRequested) {
+          if (isNaN(userBalance.personalDays) || userBalance.personalDays < daysRequested) {
+            console.error("Invalid personal days balance or insufficient days:", userBalance.personalDays, "requested:", daysRequested);
             return NextResponse.json(
               { error: `Not enough personal days available. Available: ${userBalance.personalDays}, Requested: ${daysRequested}` },
               { status: 400 }
+            );
+          }
+          
+          const newPersonalDays = userBalance.personalDays - daysRequested;
+          if (isNaN(newPersonalDays)) {
+            console.error("Calculation resulted in NaN:", userBalance.personalDays, "-", daysRequested);
+            return NextResponse.json(
+              { error: 'Calculation error when updating personal days.' },
+              { status: 500 }
             );
           }
           
@@ -278,10 +328,10 @@ export async function PATCH(
           updatedBalance = await prisma?.timeOffBalance.update({
             where: { id: userBalance.id },
             data: { 
-              personalDays: userBalance.personalDays - daysRequested 
+              personalDays: newPersonalDays
             }
           });
-          console.log(`Deducted ${daysRequested} personal days from balance`);
+          console.log(`Deducted ${daysRequested} personal days from balance. New balance: ${newPersonalDays}`);
         }
         
         console.log("Updated balance:", updatedBalance);
@@ -452,10 +502,20 @@ export async function PATCH(
         
         console.log("Request from", startDate, "to", endDate, "equals", daysRequested, "working days");
         
+        // Validate the calculated days
+        if (isNaN(daysRequested) || daysRequested <= 0) {
+          console.error("Invalid days calculation:", daysRequested);
+          return NextResponse.json(
+            { error: 'Invalid date range or calculation error. Please check the request dates.' },
+            { status: 400 }
+          );
+        }
+        
         // Update the appropriate balance based on request type
         if (existingRequest.type === 'VACATION') {
           // Check if user has enough vacation days
-          if (userBalance.vacation_days < daysRequested) {
+          if (isNaN(userBalance.vacation_days) || userBalance.vacation_days < daysRequested) {
+            console.error("Invalid vacation balance or insufficient days:", userBalance.vacation_days, "requested:", daysRequested);
             return NextResponse.json(
               { error: 'Not enough vacation days available' },
               { status: 400 }
@@ -470,7 +530,8 @@ export async function PATCH(
           
         } else if (existingRequest.type === 'SICK') {
           // Check if user has enough sick days
-          if (userBalance.sick_days < daysRequested) {
+          if (isNaN(userBalance.sick_days) || userBalance.sick_days < daysRequested) {
+            console.error("Invalid sick balance or insufficient days:", userBalance.sick_days, "requested:", daysRequested);
             return NextResponse.json(
               { error: 'Not enough sick days available' },
               { status: 400 }
@@ -485,7 +546,8 @@ export async function PATCH(
           
         } else if (existingRequest.type === 'PAID_LEAVE') {
           // Check if user has enough paid leave
-          if (userBalance.paid_leave < daysRequested) {
+          if (isNaN(userBalance.paid_leave) || userBalance.paid_leave < daysRequested) {
+            console.error("Invalid paid leave balance or insufficient days:", userBalance.paid_leave, "requested:", daysRequested);
             return NextResponse.json(
               { error: 'Not enough paid leave days available' },
               { status: 400 }
@@ -499,7 +561,8 @@ export async function PATCH(
           console.log(`Deducted ${daysRequested} paid leave days from balance`);
         } else if (existingRequest.type === 'PERSONAL') {
           // Check if user has enough personal days
-          if (userBalance.personal_days < daysRequested) {
+          if (isNaN(userBalance.personal_days) || userBalance.personal_days < daysRequested) {
+            console.error("Invalid personal days balance or insufficient days:", userBalance.personal_days, "requested:", daysRequested);
             return NextResponse.json(
               { error: 'Not enough personal days available' },
               { status: 400 }
