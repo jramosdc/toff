@@ -16,16 +16,19 @@ interface TimeOffBalance {
 // Check if we're using Prisma with PostgreSQL or running on Vercel
 export const isPrismaEnabled = process.env.VERCEL || process.env.DATABASE_URL?.includes('postgresql') || process.env.USE_PRISMA === 'true';
 
-// Initialize Prisma if PostgreSQL is configured or on Vercel
+// Properly declare global prisma type
 declare global {
-  var prisma: PrismaClient | undefined;
+  namespace globalThis {
+    var __prisma: PrismaClient | undefined;
+  }
 }
 
+// Initialize Prisma if PostgreSQL is configured or on Vercel
 let prismaClient: PrismaClient | undefined;
 if (isPrismaEnabled) {
-  prismaClient = global.prisma || new PrismaClient();
+  prismaClient = globalThis.__prisma || new PrismaClient();
   if (process.env.NODE_ENV !== 'production') {
-    global.prisma = prismaClient;
+    globalThis.__prisma = prismaClient;
   }
 }
 export const prisma = prismaClient;

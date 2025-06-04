@@ -2,6 +2,16 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import db, { dbOperations, prisma, isPrismaEnabled } from '@/lib/db';
+import { 
+  StandardUser, 
+  UsersResponse, 
+  ApiErrorResponse 
+} from '@/lib/types/api-interfaces';
+import { 
+  transformUserToApi, 
+  transformUsersToApi,
+  DatabaseUser 
+} from '@/lib/utils/api-transformers';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 
@@ -17,43 +27,90 @@ interface User {
 }
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
-    console.log("DATABASE_URL:", process.env.DATABASE_URL);
-    console.log("isPrismaEnabled:", isPrismaEnabled);
-    console.log("Prisma client available:", !!prisma);
-    
-    let users = [];
-    
-    // Use Prisma in production
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      const errorResponse: ApiErrorResponse = {
+        error: 'Unauthorized'
+      };
+      return NextResponse.json(errorResponse, { status: 401 });
+    }
+
+    if (session.user.role !== 'ADMIN') {
+      const errorResponse: ApiErrorResponse = {
+        error: 'Forbidden: Admin access required',
+        code: 'INSUFFICIENT_PERMISSIONS'
+      };
+      return NextResponse.json(errorResponse, { status: 403 });
+    }
+
+    let users: StandardUser[] = [];
+
+    // Use production/Prisma first (Vercel environment)
     if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
-      console.log("Using Prisma to fetch users");
-      users = await prisma?.user.findMany({
+      console.log("Fetching users using Prisma");
+      
+      const prismaUsers = await prisma?.user.findMany({
         select: {
           id: true,
           email: true,
           name: true,
           role: true,
           createdAt: true,
-          updatedAt: true
+          updatedAt: true,
+        },
+        orderBy: {
+          name: 'asc'
         }
-      }) || [];
-    } else if (db && dbOperations.getAllUsers) {
-      console.log("Using SQLite to fetch users");
-      users = dbOperations.getAllUsers.all();
-    } else {
-      throw new Error("No database connection available");
+      });
+
+      if (prismaUsers) {
+        // Transform Prisma results to standard format
+        users = prismaUsers.map(user => ({
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role as 'ADMIN' | 'EMPLOYEE',
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        }));
+      }
     }
     
-    return NextResponse.json(users);
+    // Fallback to SQLite (development)
+    else if (db && dbOperations) {
+      console.log("Fetching users using SQLite");
+      
+      const dbUsers = dbOperations.getAllUsers() as DatabaseUser[];
+      
+      if (dbUsers) {
+        // Transform SQLite results to standard format
+        users = transformUsersToApi(dbUsers);
+      }
+    }
+    
+    else {
+      throw new Error("No database connection available");
+    }
+
+    // Return standardized response
+    const response: UsersResponse = {
+      users,
+      total: users.length
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Error fetching users:', error);
-    return NextResponse.json({ error: `Failed to fetch users: ${error}` }, { status: 500 });
+    
+    const errorResponse: ApiErrorResponse = {
+      error: 'Failed to fetch users',
+      code: 'DATABASE_ERROR',
+      details: process.env.NODE_ENV === 'development' ? { error: String(error) } : undefined
+    };
+    
+    return NextResponse.json(errorResponse, { status: 500 });
   }
 }
 
