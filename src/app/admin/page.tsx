@@ -106,7 +106,9 @@ export default function AdminPage() {
       const response = await fetch('/api/admin/users');
       if (response.ok) {
         const data = await response.json();
-        setUsers(data);
+        // Handle the new UsersResponse format: { users: User[], total: number }
+        const usersArray = data.users || data; // Fallback to old format if needed
+        setUsers(usersArray);
         
         // Fetch balances for each user
         const balancesMap: Record<string, TimeOffBalance> = {};
@@ -116,7 +118,7 @@ export default function AdminPage() {
           paidLeave: number;
         }> = {};
         
-        for (const user of data) {
+        for (const user of usersArray) {
           // Fetch balance
           const balanceResponse = await fetch(`/api/admin/balance/${user.id}?year=${currentYear}`);
           if (balanceResponse.ok) {
