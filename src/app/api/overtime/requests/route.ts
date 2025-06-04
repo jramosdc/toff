@@ -149,6 +149,7 @@ export async function POST(request: Request) {
         requestDate,
         month,
         year,
+        'PENDING',
         notes || null
       );
     } else {

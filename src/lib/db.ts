@@ -78,10 +78,12 @@ if (db) {
     CREATE TABLE IF NOT EXISTS overtime_requests (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
-      date DATETIME NOT NULL,
-      hours INTEGER NOT NULL,
+      hours REAL NOT NULL,
+      request_date DATE NOT NULL,
+      month INTEGER NOT NULL,
+      year INTEGER NOT NULL,
       status TEXT DEFAULT 'PENDING',
-      reason TEXT,
+      notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
@@ -177,8 +179,8 @@ export const dbOperations = db ? {
 
   // Overtime request operations
   createOvertimeRequest: db.prepare(`
-    INSERT INTO overtime_requests (id, user_id, date, hours, status, reason)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO overtime_requests (id, user_id, hours, request_date, month, year, status, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `),
 
   getUserOvertimeRequests: db.prepare(`
