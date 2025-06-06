@@ -1,0 +1,8 @@
+id,email,name,password,role,created_at,updated_at
+2fc00a76-c64e-4bea-8da5-88a05fd0256a,admin@example.com,"Admin User",$2b$10$fAr6DQucQUD8k51s7D50G.26HAFqjXBY0Yv4FuAnRz5trT7uXETBa,ADMIN,"2025-03-17 02:52:44","2025-03-17 02:52:44"
+c2e2ec5c-a8d1-40e2-b22f-7be468aebb20,mrubalcava@efe.com,"Monica Rubalcava",$2b$10$jvhRTTuMYB7eDCGPz1x4oObjraeHNNbo0DLysuNV4.1MUii0RspmK,EMPLOYEE,"2025-03-17 03:14:08","2025-03-17 03:14:08"
+d220ec40-42ed-4442-a2a0-70ab54e8825c,eribas@efe.com,"Eduard Ribas",$2b$10$hLPoN1FfO1vBOFY5jDDqQ.TY3d03E9CYhpDGWS52lDk5UGLD7UjOa,EMPLOYEE,"2025-03-17 03:15:52","2025-03-17 03:15:52"
+1840bed2-a9fe-40fd-826b-6ded835b8be9,atraver@efe.com,"Albert Traver",$2b$10$3ylj0aWHs2YQcAkvlBfBKOoFdc5z.1Lra7Zo3YYItwdZwCDABexgO,EMPLOYEE,"2025-03-17 03:24:52","2025-03-17 03:24:52"
+e807953c-9a19-4a10-8eeb-be6833ee9b72,aarredondo@efe.com,"Alejandra Arredondo",$2b$10$3iYzAQXNOwZpl4.slJBEm.9nOcbhuvWdkieWhY7TeZRfM2D36i.H2,EMPLOYEE,"2025-03-17 03:26:02","2025-03-17 03:26:02"
+e8afe9c7-1d92-4b0e-b58a-049549c787ca,bpascual@efe.com,"Beatriz Pascual",$2b$10$d0uKyE8kRnLiJT92BXYubuTlI3G3SihJHcCLtN/6dI1s4yWQdCJUe,EMPLOYEE,"2025-03-18 03:31:17","2025-03-18 03:31:17"
+948e1a23-48bf-4157-bc3b-c35d4ea3c791,mviqueira@efe.com,"Mikaela Viqueira",$2b$10$jdVO4/VMe5eFc/KQBFyGDudhLqAfco0VEOurXYOQ4u6PLeDJtnmOK,EMPLOYEE,"2025-03-18 03:31:57","2025-03-18 03:31:57"

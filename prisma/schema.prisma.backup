@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  type              String
+  provider          String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  providerAccountId String
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  expires      DateTime
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+  @@map("verification_tokens")
+}
+
+model User {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  name            String
+  role            UserRole         @default(EMPLOYEE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  password        String?
+  auditLogs       AuditLog[]
+  timeOffBalances TimeOffBalance[]
+  timeOffRequests TimeOffRequest[]
+  accounts        Account[]
+  sessions        Session[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model TimeOffBalance {
+  id            String      @id @default(uuid())
+  userId        String
+  year          Int
+  type          TimeOffType
+  totalDays     Float
+  usedDays      Float       @default(0)
+  remainingDays Float
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year, type], name: "unique_balance_per_year")
+  @@index([userId, year])
+  @@index([type])
+}
+
+model TimeOffRequest {
+  id          String        @id @default(uuid())
+  userId      String
+  type        TimeOffType
+  startDate   DateTime
+  endDate     DateTime
+  workingDays Float
+  status      RequestStatus @default(PENDING)
+  reason      String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, startDate, endDate, type], name: "unique_request_per_period")
+  @@index([userId])
+  @@index([startDate, endDate])
+  @@index([status])
+  @@index([type])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String
+  details    Json
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum TimeOffType {
+  VACATION
+  SICK
+  PAID_LEAVE
+  PERSONAL
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
