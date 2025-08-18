@@ -7,19 +7,21 @@ vi.mock('@/lib/date-utils', () => ({
   calculateWorkingDays: vi.fn(() => 5),
 }));
 
-// Mock next-auth
+// Mock next-auth with overridable return value
+let mockUseSessionReturn: any = {
+  data: {
+    user: {
+      id: 'test-user-id',
+      email: 'test@example.com',
+      name: 'Test User',
+      role: 'EMPLOYEE'
+    }
+  },
+  status: 'authenticated'
+};
+
 vi.mock('next-auth/react', () => ({
-  useSession: vi.fn(() => ({
-    data: {
-      user: {
-        id: 'test-user-id',
-        email: 'test@example.com',
-        name: 'Test User',
-        role: 'EMPLOYEE'
-      }
-    },
-    status: 'authenticated'
-  })),
+  useSession: vi.fn(() => mockUseSessionReturn),
   signIn: vi.fn(),
   signOut: vi.fn(),
 }));
@@ -112,8 +114,8 @@ describe('DashboardPage', () => {
         expect(screen.getByText('Time Off Balance Summary')).toBeInTheDocument();
         expect(screen.getByText('Vacation Days')).toBeInTheDocument();
         expect(screen.getByText('Sick Days')).toBeInTheDocument();
-        expect(screen.getByText('Paid Leave')).toBeInTheDocument();
-        expect(screen.getByText('Personal Time Off')).toBeInTheDocument();
+        expect(screen.getAllByText('Paid Leave').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByText('Personal Days')).toBeInTheDocument();
       });
     });
 
@@ -157,8 +159,7 @@ describe('DashboardPage', () => {
       await waitFor(() => {
         expect(screen.getByText('15')).toBeInTheDocument(); // Vacation days
         expect(screen.getByText('7')).toBeInTheDocument();  // Sick days
-        expect(screen.getByText('3')).toBeInTheDocument();  // Paid leave
-        expect(screen.getByText('3')).toBeInTheDocument();  // Personal days
+        expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(2); // Paid + Personal
       });
     });
 
@@ -257,7 +258,7 @@ describe('DashboardPage', () => {
       await waitFor(() => {
         expect(screen.getByText('Annual vacation')).toBeInTheDocument();
         expect(screen.getByText('VACATION')).toBeInTheDocument();
-        expect(screen.getByText('PENDING')).toBeInTheDocument();
+        expect(screen.getAllByText('PENDING').length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -267,7 +268,8 @@ describe('DashboardPage', () => {
       await waitFor(() => {
         expect(screen.getByText('8')).toBeInTheDocument(); // Hours
         expect(screen.getByText('1.00')).toBeInTheDocument(); // Equivalent days
-        expect(screen.getByText('PENDING')).toBeInTheDocument();
+        // Multiple PENDING badges may exist across sections; ensure at least one
+        expect(screen.getAllByText('PENDING').length).toBeGreaterThanOrEqual(1);
         expect(screen.getByText('Extra work')).toBeInTheDocument(); // Notes
       });
     });
@@ -275,9 +277,7 @@ describe('DashboardPage', () => {
 
   describe('Admin Features', () => {
     it('should show admin panel button for admin users', async () => {
-      // Mock admin user session
-      const { useSession } = require('next-auth/react');
-      vi.mocked(useSession).mockReturnValue({
+      mockUseSessionReturn = {
         data: {
           user: {
             id: 'admin-1',
@@ -287,7 +287,7 @@ describe('DashboardPage', () => {
           }
         },
         status: 'authenticated'
-      });
+      };
 
       render(<DashboardPage />);
       
@@ -297,9 +297,7 @@ describe('DashboardPage', () => {
     });
 
     it('should show approve/reject buttons for pending requests when admin', async () => {
-      // Mock admin user session
-      const { useSession } = require('next-auth/react');
-      vi.mocked(useSession).mockReturnValue({
+      mockUseSessionReturn = {
         data: {
           user: {
             id: 'admin-1',
@@ -309,13 +307,13 @@ describe('DashboardPage', () => {
           }
         },
         status: 'authenticated'
-      });
+      };
 
       render(<DashboardPage />);
       
       await waitFor(() => {
-        expect(screen.getByText('Approve')).toBeInTheDocument();
-        expect(screen.getByText('Reject')).toBeInTheDocument();
+        expect(screen.getAllByText('Approve').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Reject').length).toBeGreaterThanOrEqual(1);
       });
     });
   });

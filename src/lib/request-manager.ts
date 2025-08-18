@@ -236,6 +236,9 @@ export class RequestManager {
         }
         throw new DatabaseError('Unsupported environment');
       } catch (error) {
+        if (error instanceof ValidationError) {
+          throw error;
+        }
         throw new DatabaseError('Failed to approve request');
       }
     });
@@ -339,6 +342,9 @@ export class RequestManager {
         }
         throw new DatabaseError('Unsupported environment');
       } catch (error) {
+        if (error instanceof ValidationError) {
+          throw error;
+        }
         throw new DatabaseError('Failed to reject request');
       }
     });
@@ -433,6 +439,9 @@ export class RequestManager {
           throw new DatabaseError('Unsupported environment');
         }
       } catch (error) {
+        if (error instanceof ValidationError) {
+          throw error;
+        }
         throw new DatabaseError('Failed to delete request');
       }
     });
