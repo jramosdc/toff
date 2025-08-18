@@ -5,12 +5,14 @@ import { randomUUID } from 'crypto';
 
 interface TimeOffBalance {
   id: string;
-  user_id: string;
-  vacation_days: number;
-  sick_days: number;
-  paid_leave: number;
-  personal_days: number;
+  userId: string;
   year: number;
+  type: string;
+  totalDays: number;
+  usedDays: number;
+  remainingDays: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Check if we're using Prisma with PostgreSQL or running on Vercel
@@ -47,49 +49,62 @@ if (db) {
       email TEXT UNIQUE NOT NULL,
       password TEXT,
       role TEXT DEFAULT 'EMPLOYEE',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS time_off_balance (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      vacation_days INTEGER DEFAULT 15,
-      sick_days INTEGER DEFAULT 7,
-      paid_leave INTEGER DEFAULT 3,
-      personal_days INTEGER DEFAULT 3,
+      userId TEXT NOT NULL,
       year INTEGER NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(user_id, year),
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      type TEXT NOT NULL,
+      totalDays REAL NOT NULL,
+      usedDays REAL DEFAULT 0,
+      remainingDays REAL NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(userId, year, type),
+      FOREIGN KEY (userId) REFERENCES users(id)
     );
 
     CREATE TABLE IF NOT EXISTS time_off_requests (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      start_date DATETIME NOT NULL,
-      end_date DATETIME NOT NULL,
+      userId TEXT NOT NULL,
       type TEXT NOT NULL,
+      startDate DATETIME NOT NULL,
+      endDate DATETIME NOT NULL,
+      workingDays REAL NOT NULL,
       status TEXT DEFAULT 'PENDING',
       reason TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(userId, startDate, endDate, type),
+      FOREIGN KEY (userId) REFERENCES users(id)
     );
     
     CREATE TABLE IF NOT EXISTS overtime_requests (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
+      userId TEXT NOT NULL,
       hours REAL NOT NULL,
-      request_date DATE NOT NULL,
+      requestDate DATE NOT NULL,
       month INTEGER NOT NULL,
       year INTEGER NOT NULL,
       status TEXT DEFAULT 'PENDING',
       notes TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      action TEXT NOT NULL,
+      entityType TEXT NOT NULL,
+      entityId TEXT NOT NULL,
+      details TEXT NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id)
     );
   `);
 }
@@ -122,52 +137,83 @@ export const dbOperations = db ? {
 
   // Time off balance operations
   createTimeOffBalance: db.prepare(`
-    INSERT INTO time_off_balance (id, user_id, vacation_days, sick_days, paid_leave, personal_days, year)
+    INSERT INTO time_off_balance (id, userId, year, type, totalDays, usedDays, remainingDays)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `),
 
   getTimeOffBalance: db.prepare(`
-    SELECT * FROM time_off_balance WHERE user_id = ? AND year = ?
+    SELECT * FROM time_off_balance WHERE userId = ? AND year = ? AND type = ?
   `).get,
 
   updateTimeOffBalance: db.prepare(`
     UPDATE time_off_balance
-    SET vacation_days = ?, sick_days = ?, paid_leave = ?, personal_days = ?
-    WHERE user_id = ? AND year = ?
+    SET totalDays = ?, usedDays = ?, remainingDays = ?, updatedAt = CURRENT_TIMESTAMP
+    WHERE userId = ? AND year = ? AND type = ?
   `),
 
   getUserTimeOffBalance: db.prepare(`
-    SELECT * FROM time_off_balance WHERE user_id = ? AND year = ?
+    SELECT * FROM time_off_balance WHERE userId = ? AND year = ? AND type = ?
   `).get,
 
-  createOrUpdateTimeOffBalance: function(id: string, userId: string, vacationDays: number, sickDays: number, paidLeave: number, personalDays: number, year: number) {
+  getAllUserTimeOffBalances: db.prepare(`
+    SELECT * FROM time_off_balance WHERE userId = ? AND year = ?
+  `).all,
+
+  createOrUpdateTimeOffBalance: function(id: string, userId: string, year: number, type: string, totalDays: number, usedDays: number, remainingDays: number) {
     if (!db || !this.getUserTimeOffBalance || !this.updateTimeOffBalance || !this.createTimeOffBalance) {
       throw new Error('Database operations not available');
     }
 
-    const existingBalance = this.getUserTimeOffBalance(userId, year);
+    const existingBalance = this.getUserTimeOffBalance(userId, year, type);
     if (existingBalance) {
-      this.updateTimeOffBalance.run(vacationDays, sickDays, paidLeave, personalDays, userId, year);
+      this.updateTimeOffBalance.run(totalDays, usedDays, remainingDays, userId, year, type);
     } else {
-      this.createTimeOffBalance.run(id, userId, vacationDays, sickDays, paidLeave, personalDays, year);
+      this.createTimeOffBalance.run(id, userId, year, type, totalDays, usedDays, remainingDays);
     }
+  },
+
+  // Initialize default balances for a user
+  initializeUserBalances: function(userId: string, year: number) {
+    if (!db || !this.createTimeOffBalance) {
+      throw new Error('Database operations not available');
+    }
+
+    const defaultBalances = [
+      { type: 'VACATION', totalDays: 15, usedDays: 0, remainingDays: 15 },
+      { type: 'SICK', totalDays: 7, usedDays: 0, remainingDays: 7 },
+      { type: 'PAID_LEAVE', totalDays: 3, usedDays: 0, remainingDays: 3 },
+      { type: 'PERSONAL', totalDays: 3, usedDays: 0, remainingDays: 3 }
+    ];
+
+    defaultBalances.forEach(balance => {
+      const balanceId = randomUUID();
+      this.createTimeOffBalance.run(
+        balanceId,
+        userId,
+        year,
+        balance.type,
+        balance.totalDays,
+        balance.usedDays,
+        balance.remainingDays
+      );
+    });
   },
 
   // Time off request operations
   createTimeOffRequest: db.prepare(`
-    INSERT INTO time_off_requests (id, user_id, start_date, end_date, type, status, reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO time_off_requests (id, userId, type, startDate, endDate, workingDays, status, reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `),
 
   getTimeOffRequests: db.prepare(`
     SELECT r.*, u.name as user_name
     FROM time_off_requests r
-    JOIN users u ON r.user_id = u.id
+    JOIN users u ON r.userId = u.id
     WHERE r.status = ?
   `).all,
 
   getUserTimeOffRequests: db.prepare(`
-    SELECT * FROM time_off_requests WHERE user_id = ?
+    SELECT * FROM time_off_requests WHERE userId = ?
   `).all,
 
   getAllTimeOffRequests: db.prepare(`
@@ -176,18 +222,22 @@ export const dbOperations = db ? {
 
   updateTimeOffRequestStatus: db.prepare(`
     UPDATE time_off_requests
-    SET status = ?
+    SET status = ?, updatedAt = CURRENT_TIMESTAMP
     WHERE id = ?
   `),
 
+  getTimeOffRequestById: db.prepare(`
+    SELECT * FROM time_off_requests WHERE id = ?
+  `).get,
+
   // Overtime request operations
   createOvertimeRequest: db.prepare(`
-    INSERT INTO overtime_requests (id, user_id, hours, request_date, month, year, status, notes)
+    INSERT INTO overtime_requests (id, userId, hours, requestDate, month, year, status, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `),
 
   getUserOvertimeRequests: db.prepare(`
-    SELECT * FROM overtime_requests WHERE user_id = ?
+    SELECT * FROM overtime_requests WHERE userId = ?
   `).all,
 
   getAllOvertimeRequests: db.prepare(`
@@ -197,8 +247,8 @@ export const dbOperations = db ? {
   getOvertimeRequestsByStatus: db.prepare(`
     SELECT o.*, u.name as user_name
     FROM overtime_requests o
-    JOIN users u ON o.user_id = u.id
-    WHERE o.status = ? ORDER BY o.created_at DESC
+    JOIN users u ON o.userId = u.id
+    WHERE o.status = ? ORDER BY o.createdAt DESC
   `).all,
 
   updateOvertimeRequestStatus: db.prepare(`
@@ -217,18 +267,19 @@ export const dbOperations = db ? {
     const daysToAdd = hours / 8;
     
     // Get current balance
-    const balance = this.getUserTimeOffBalance(userId, year) as TimeOffBalance | undefined;
+    const balance = this.getUserTimeOffBalance(userId, year, 'VACATION') as TimeOffBalance | undefined;
     
     if (balance) {
       // Update balance with added vacation days
-      const newVacationDays = balance.vacation_days + daysToAdd;
+      const newTotalDays = balance.totalDays + daysToAdd;
+      const newRemainingDays = newTotalDays - balance.usedDays;
       return this.updateTimeOffBalance.run(
-        newVacationDays,
-        balance.sick_days,
-        balance.paid_leave,
-        balance.personal_days,
+        newTotalDays,
+        balance.usedDays,
+        newRemainingDays,
         userId,
-        year
+        year,
+        'VACATION'
       );
     } else {
       // Create new balance if none exists
@@ -236,11 +287,11 @@ export const dbOperations = db ? {
       return this.createTimeOffBalance.run(
         balanceId,
         userId,
+        year,
+        'VACATION',
         daysToAdd, // Start with the overtime days
-        8, // Default sick days
-        0, // Default paid leave
-        3, // Default personal days
-        year
+        0, // Default used days
+        daysToAdd // Default remaining days
       );
     }
   }

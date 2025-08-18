@@ -16,14 +16,18 @@ async function main() {
   await prisma.user.deleteMany({});
 
   console.log('Creating admin user...');
-  // Create admin user
-  const adminPassword = await bcrypt.hash('jmejia', 10);
+  // Create admin user with environment variables
+  const adminPassword = process.env.ADMIN_INITIAL_PASSWORD || 'jmejia';
+  const adminEmail = process.env.ADMIN_EMAIL || 'jmejia@efe.com';
+  const adminName = process.env.ADMIN_NAME || 'Jairo Mejia';
+  const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
+  
   const admin = await prisma.user.create({
     data: {
       id: randomUUID(),
-      email: 'jmejia@efe.com',
-      name: 'Jairo Mejia',
-      password: adminPassword,
+      email: adminEmail,
+      name: adminName,
+      password: adminPasswordHash,
       role: 'ADMIN',
     }
   });

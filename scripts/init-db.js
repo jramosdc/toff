@@ -94,11 +94,13 @@ console.log('Database initialized successfully');
 // Create admin user
 const adminId = randomUUID();
 const adminPassword = bcrypt.hashSync('admin', 10);
+const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
+const adminName = process.env.ADMIN_NAME || 'Admin User';
 
 db.prepare(`
   INSERT INTO users (id, email, name, password, role)
   VALUES (?, ?, ?, ?, ?)
-`).run(adminId, 'admin@example.com', 'Admin User', adminPassword, 'ADMIN');
+`).run(adminId, adminEmail, adminName, adminPassword, 'ADMIN');
 
 // Create test users
 const createTestUser = (email, name, role = 'EMPLOYEE') => {

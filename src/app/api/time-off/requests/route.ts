@@ -10,6 +10,8 @@ import db, { prisma, isPrismaEnabled, dbOperations } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 import Debug from 'debug';
 import { calculateWorkingDays } from '@/lib/date-utils';
+import { CreateTimeOffRequestSchema } from '@/lib/validators/schemas';
+import { validateRequest, createErrorResponse } from '@/lib/validators/middleware';
 
 interface TimeOffBalance {
   vacationDays: number;
@@ -21,9 +23,7 @@ export async function GET() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
-    return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-    });
+    return createErrorResponse('Unauthorized', 'UNAUTHORIZED', 401);
   }
 
   console.log('Session user in requests GET:', session.user);
@@ -32,9 +32,7 @@ export async function GET() {
   const userRole = session.user.role;
   
   if (!userId) {
-    return new NextResponse(JSON.stringify({ error: 'User ID not found in session' }), {
-      status: 400,
-    });
+    return createErrorResponse('User ID not found in session', 'MISSING_USER_ID', 400);
   }
   
   try {
@@ -82,10 +80,10 @@ export async function GET() {
       // SQLite fallback for development
       try {
         // Attempt to use dbOperations if it exists
-        if (typeof dbOperations !== 'undefined') {
+        if (typeof dbOperations !== 'undefined' && dbOperations) {
           requests = userRole === 'ADMIN'
-            ? dbOperations.getTimeOffRequests?.all('PENDING')
-            : dbOperations.getUserTimeOffRequests?.all(userId);
+            ? dbOperations.getTimeOffRequests?.('PENDING')
+            : dbOperations.getUserTimeOffRequests?.(userId);
         } else {
           // Fallback to direct SQLite queries
           if (userRole === 'ADMIN') {
@@ -116,9 +114,7 @@ export async function GET() {
     return new NextResponse(JSON.stringify(requests || []));
   } catch (error) {
     console.error("Error fetching time off requests:", error);
-    return new NextResponse(JSON.stringify({ error: `Error fetching requests: ${error}` }), {
-      status: 500,
-    });
+    return createErrorResponse(`Error fetching requests: ${error}`, 'FETCH_ERROR', 500);
   }
 }
 
@@ -131,7 +127,7 @@ export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       debug('No session found or user not authenticated');
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return createErrorResponse('Not authenticated', 'UNAUTHORIZED', 401);
     }
     
     // Get user info for notifications
@@ -140,30 +136,31 @@ export async function POST(req: NextRequest) {
     const userEmail = session.user.email || '';
     debug('Session user:', { userId, userName, userEmail });
     
-    // Parse request body
-    const body = await req.json();
-    debug('Request body:', body);
+    // Parse and validate request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (error) {
+      return createErrorResponse('Invalid JSON in request body', 'INVALID_JSON', 400);
+    }
     
-    const {
-      userId: requestUserId,
-      startDate,
-      endDate,
-      type,
-      reason
-    } = body;
-    
-    // Use provided userId or fall back to session user id
-    const effectiveUserId = requestUserId || userId;
-    debug('Effective userId:', effectiveUserId);
-    
-    // Validate required fields
-    if (!startDate || !endDate || !type) {
-      debug('Missing required fields');
-      return NextResponse.json(
-        { error: "startDate, endDate, and type are required" },
-        { status: 400 }
+    // Validate the request data
+    const validation = validateRequest(CreateTimeOffRequestSchema, body);
+    if (!validation.success) {
+      return createErrorResponse(
+        'Validation failed',
+        'VALIDATION_ERROR',
+        400,
+        validation.errors
       );
     }
+    
+    const validatedData = validation.data;
+    debug('Validated request data:', validatedData);
+    
+    // Use provided userId or fall back to session user id
+    const effectiveUserId = validatedData.userId || userId;
+    debug('Effective userId:', effectiveUserId);
     
     let id: string;
     
@@ -171,8 +168,8 @@ export async function POST(req: NextRequest) {
       debug('Using Prisma to create time off request');
       
       // Create request in Postgres with Prisma
-      const startDateObj = new Date(startDate);
-      const endDateObj = new Date(endDate);
+      const startDateObj = new Date(validatedData.startDate);
+      const endDateObj = new Date(validatedData.endDate);
       
       // Set time components to ensure consistent date handling
       startDateObj.setHours(0, 0, 0, 0);
@@ -184,7 +181,7 @@ export async function POST(req: NextRequest) {
           userId: effectiveUserId,
           startDate: startDateObj,
           endDate: endDateObj,
-          type: type,
+          type: validatedData.type,
           status: {
             in: ['PENDING', 'APPROVED']  // Don't allow if there's already a pending or approved request
           }
@@ -192,11 +189,10 @@ export async function POST(req: NextRequest) {
       });
       
       if (existingRequest) {
-        return NextResponse.json(
-          { 
-            error: `A ${type.toLowerCase().replace('_', ' ')} request for these dates already exists with status: ${existingRequest.status}. Please check your existing requests or modify the dates.` 
-          },
-          { status: 400 }
+        return createErrorResponse(
+          `A ${validatedData.type.toLowerCase().replace('_', ' ')} request for these dates already exists with status: ${existingRequest.status}. Please check your existing requests or modify the dates.`,
+          'DUPLICATE_REQUEST',
+          400
         );
       }
       
@@ -209,9 +205,9 @@ export async function POST(req: NextRequest) {
             userId: effectiveUserId,
             startDate: startDateObj,
             endDate: endDateObj,
-            type,
+            type: validatedData.type,
             status: 'PENDING',
-            reason: reason || null,
+            reason: validatedData.reason || null,
             workingDays
           },
           include: {
@@ -227,28 +223,26 @@ export async function POST(req: NextRequest) {
         
         // Handle specific Prisma errors
         if (prismaError.code === 'P2002') {
-          return NextResponse.json(
-            { 
-              error: `A ${type.toLowerCase().replace('_', ' ')} request for these exact dates already exists. Please check your existing requests or choose different dates.` 
-            },
-            { status: 400 }
+          return createErrorResponse(
+            `A ${validatedData.type.toLowerCase().replace('_', ' ')} request for these exact dates already exists. Please check your existing requests or choose different dates.`,
+            'DUPLICATE_REQUEST',
+            400
           );
         }
         
         // Handle other Prisma errors
-        return NextResponse.json(
-          { 
-            error: `Failed to create time off request: ${prismaError.message || prismaError}` 
-          },
-          { status: 500 }
+        return createErrorResponse(
+          `Failed to create time off request: ${prismaError.message || prismaError}`,
+          'PRISMA_ERROR',
+          500
         );
       }
     } else if (db) {
       debug('Using SQLite to create time off request');
       // Create request in SQLite
       id = uuidv4();
-      const startDateObj = new Date(startDate);
-      const endDateObj = new Date(endDate);
+      const startDateObj = new Date(validatedData.startDate);
+      const endDateObj = new Date(validatedData.endDate);
       
       // Set time components to ensure consistent date handling
       startDateObj.setHours(0, 0, 0, 0);
@@ -266,15 +260,14 @@ export async function POST(req: NextRequest) {
         effectiveUserId, 
         startDateObj.toISOString(), 
         endDateObj.toISOString(), 
-        type
-      );
+        validatedData.type
+      ) as { status: string } | undefined;
       
       if (existingRequest) {
-        return NextResponse.json(
-          { 
-            error: `A ${type.toLowerCase().replace('_', ' ')} request for these dates already exists with status: ${existingRequest.status}. Please check your existing requests or modify the dates.` 
-          },
-          { status: 400 }
+        return createErrorResponse(
+          `A ${validatedData.type.toLowerCase().replace('_', ' ')} request for these dates already exists with status: ${existingRequest.status}. Please check your existing requests or modify the dates.`,
+          'DUPLICATE_REQUEST',
+          400
         );
       }
       
@@ -284,18 +277,18 @@ export async function POST(req: NextRequest) {
       try {
         const statement = db.prepare(`
           INSERT INTO time_off_requests (
-            id, user_id, start_date, end_date, type, status, reason, working_days
-          ) VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?)
+            id, user_id, type, start_date, end_date, working_days, status, reason
+          ) VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?)
         `);
         
         statement.run(
           id, 
           effectiveUserId, 
+          validatedData.type,
           startDateObj.toISOString(), 
           endDateObj.toISOString(), 
-          type, 
-          reason || null, 
-          workingDays
+          workingDays,
+          validatedData.reason || null
         );
         debug('SQLite request created with ID:', id);
         
@@ -304,20 +297,18 @@ export async function POST(req: NextRequest) {
         
         // Handle SQLite unique constraint errors
         if (sqliteError.message && sqliteError.message.includes('UNIQUE constraint failed')) {
-          return NextResponse.json(
-            { 
-              error: `A ${type.toLowerCase().replace('_', ' ')} request for these exact dates already exists. Please check your existing requests or choose different dates.` 
-            },
-            { status: 400 }
+          return createErrorResponse(
+            `A ${validatedData.type.toLowerCase().replace('_', ' ')} request for these exact dates already exists. Please check your existing requests or choose different dates.`,
+            'DUPLICATE_REQUEST',
+            400
           );
         }
         
         // Handle other SQLite errors
-        return NextResponse.json(
-          { 
-            error: `Failed to create time off request: ${sqliteError.message || sqliteError}` 
-          },
-          { status: 500 }
+        return createErrorResponse(
+          `Failed to create time off request: ${sqliteError.message || sqliteError}`,
+          'SQLITE_ERROR',
+          500
         );
       }
     } else {
@@ -326,19 +317,6 @@ export async function POST(req: NextRequest) {
     
     // Try to send email notification to admin(s) only, not to the employee
     try {
-      // Remove the email to employee
-      // if (typeof sendTimeOffRequestSubmittedEmail === 'function' && userEmail) {
-      //   await sendTimeOffRequestSubmittedEmail(
-      //     userEmail,    // to
-      //     userName,     // userName
-      //     startDate,    // startDate
-      //     endDate,      // endDate
-      //     type,         // type
-      //     reason        // reason (optional)
-      //   );
-      //   debug("Sent time off request confirmation email to user:", userEmail);
-      // }
-      
       // Send notification to admin(s)
       if (process.env.VERCEL || isPrismaEnabled) {
         // Get admin users with Prisma
@@ -354,11 +332,11 @@ export async function POST(req: NextRequest) {
               await sendTimeOffRequestAdminNotification(
                 admin.email,
                 userName,
-                startDate,
-                endDate,
-                type,
+                validatedData.startDate,
+                validatedData.endDate,
+                validatedData.type,
                 id,
-                reason
+                validatedData.reason
               );
               debug("Sent admin notification to:", admin.email);
             } catch (emailError) {
@@ -380,11 +358,11 @@ export async function POST(req: NextRequest) {
               await sendTimeOffRequestAdminNotification(
                 admin.email,
                 userName,
-                startDate,
-                endDate,
-                type,
+                validatedData.startDate,
+                validatedData.endDate,
+                validatedData.type,
                 id,
-                reason
+                validatedData.reason
               );
               debug("Sent admin notification to:", admin.email);
             } catch (emailError) {
@@ -402,6 +380,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, id });
   } catch (error) {
     console.error("Error creating time off request:", error);
-    return NextResponse.json({ error: `Error creating time off request: ${error}` }, { status: 500 });
+    return createErrorResponse(`Error creating time off request: ${error}`, 'INTERNAL_ERROR', 500);
   }
 } 
