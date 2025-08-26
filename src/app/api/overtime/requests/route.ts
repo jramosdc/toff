@@ -68,13 +68,13 @@ export async function GET() {
             console.warn('Prisma expected but not available in GET /overtime/requests');
             throw new Error('Prisma client unavailable');
           }
-          const rows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT *
-             FROM overtime_requests
-             WHERE "userId" = $1::uuid
-             ORDER BY "createdAt" DESC`,
-            session.user.id
-          );
+          console.log('Overtime GET: user branch (Prisma)');
+          const rows = await prisma.$queryRaw<any[]>`
+            SELECT *
+            FROM overtime_requests
+            WHERE "userId" = ${session.user.id}::uuid
+            ORDER BY "createdAt" DESC
+          `;
           return NextResponse.json(rows);
         }
       } catch (prismaError: any) {
@@ -114,13 +114,13 @@ export async function GET() {
               );
               return NextResponse.json(rows);
             } else {
-              const rows = await prisma.$queryRawUnsafe<any[]>(
-                `SELECT *
-                 FROM overtime_requests
-                 WHERE "userId" = $1::uuid
-                 ORDER BY "createdAt" DESC`,
-                session.user.id
-              );
+              console.log('Overtime GET: user branch after create-table (Prisma)');
+              const rows = await prisma.$queryRaw<any[]>`
+                SELECT *
+                FROM overtime_requests
+                WHERE "userId" = ${session.user.id}::uuid
+                ORDER BY "createdAt" DESC
+              `;
               return NextResponse.json(rows);
             }
           } catch (createErr) {
