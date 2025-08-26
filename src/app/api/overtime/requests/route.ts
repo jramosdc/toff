@@ -88,7 +88,7 @@ export async function GET() {
             await prisma.$executeRawUnsafe(
               `CREATE TABLE IF NOT EXISTS overtime_requests (
                 id uuid PRIMARY KEY,
-                "userId" uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                "userId" uuid NOT NULL,
                 hours double precision NOT NULL,
                 "requestDate" date NOT NULL,
                 month integer NOT NULL,
@@ -246,7 +246,7 @@ export async function POST(request: Request) {
             await prisma.$executeRawUnsafe(
               `CREATE TABLE IF NOT EXISTS overtime_requests (
                 id uuid PRIMARY KEY,
-                "userId" uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                "userId" uuid NOT NULL,
                 hours double precision NOT NULL,
                 "requestDate" date NOT NULL,
                 month integer NOT NULL,
