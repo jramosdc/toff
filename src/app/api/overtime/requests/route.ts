@@ -118,6 +118,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    let stage = 'parse-request';
     const data = await request.json();
     const { hours, notes, userId } = data;
     
@@ -157,6 +158,7 @@ export async function POST(request: Request) {
       console.log("Using Prisma to create overtime request");
       try {
         // First verify the user exists in the database
+        stage = 'verify-user';
         if (!prisma) {
           console.error('Prisma expected but not available in POST /overtime/requests');
           throw new Error('Prisma client unavailable');
@@ -173,6 +175,7 @@ export async function POST(request: Request) {
         }
         
         // Create the overtime request using raw SQL (table managed outside Prisma schema)
+        stage = 'insert-overtime';
         await prisma.$executeRawUnsafe(
           `INSERT INTO overtime_requests (id, "userId", hours, "requestDate", month, year, status, notes)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -186,13 +189,15 @@ export async function POST(request: Request) {
           notes || null
         );
         console.log("Successfully created overtime request with Prisma");
-      } catch (prismaError) {
-        console.error("Prisma error:", prismaError);
-        throw prismaError;
+      } catch (prismaError: any) {
+        console.error(`Prisma error at stage ${stage}:`, prismaError);
+        const message = prismaError?.message || String(prismaError);
+        throw new Error(`Stage ${stage} failed: ${message}`);
       }
     } else if (db) {
       // Fallback to SQLite in development
       console.log("Using SQLite to create overtime request");
+      stage = 'sqlite-insert';
       (dbOperations as any).createOvertimeRequest.run(
         requestId,
         userIdToUse,
@@ -214,10 +219,12 @@ export async function POST(request: Request) {
       let user;
       
       if (process.env.VERCEL || isPrismaEnabled) {
+        stage = 'fetch-user-for-email';
         user = await prisma?.user.findUnique({
           where: { id: userIdToUse }
         });
       } else {
+        stage = 'sqlite-fetch-user-for-email';
         user = (dbOperations as any).getUserById.get(userIdToUse) as User;
       }
       
@@ -242,11 +249,13 @@ export async function POST(request: Request) {
         });
       } else if (process.env.VERCEL || isPrismaEnabled) {
         // Get admin users with Prisma
+        stage = 'fetch-admins';
         const adminUsers = await prisma?.user.findMany({
           where: { role: 'ADMIN' }
         });
         
         for (const admin of adminUsers || []) {
+          stage = 'send-email';
           await sendOvertimeRequestNotification({
             employeeName: user.name,
             employeeEmail: user.email,
@@ -259,9 +268,11 @@ export async function POST(request: Request) {
         }
       } else {
         // Get admin users with SQLite
+        stage = 'sqlite-fetch-admins';
         const adminUsers = (dbOperations as any).getAdminUsers.all() as AdminUser[];
         
         for (const admin of adminUsers) {
+          stage = 'send-email';
           await sendOvertimeRequestNotification({
             employeeName: user.name,
             employeeEmail: user.email,
@@ -275,12 +286,13 @@ export async function POST(request: Request) {
       }
     } catch (emailError) {
       // Log email error but don't fail the request
-      console.error('Failed to send notification email:', emailError);
+      console.error(`Failed to send notification email at stage ${stage}:`, emailError);
     }
 
     return NextResponse.json({ id: requestId, status: 'PENDING' }, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating overtime request:', error);
-    return NextResponse.json({ error: `Failed to create overtime request: ${error}` }, { status: 500 });
+    const message = error?.message || String(error);
+    return NextResponse.json({ error: `Failed to create overtime request: ${message}` }, { status: 500 });
   }
 } 
