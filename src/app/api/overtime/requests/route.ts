@@ -78,11 +78,54 @@ export async function GET() {
           return NextResponse.json(rows);
         }
       } catch (prismaError: any) {
-        // If table doesn't exist yet in Postgres, return empty gracefully
+        // If table doesn't exist yet in Postgres, create it and retry once
         const message = String(prismaError?.message || prismaError);
         if (message.includes('relation') && message.includes('does not exist')) {
-          console.warn('overtime_requests table not found; returning empty list');
-          return NextResponse.json([]);
+          console.warn('overtime_requests table not found; attempting to create and retry');
+          try {
+            if (!prisma) throw new Error('Prisma client unavailable for create-table');
+            await prisma.$executeRawUnsafe(`
+              CREATE TABLE IF NOT EXISTS overtime_requests (
+                id uuid PRIMARY KEY,
+                "userId" uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                hours double precision NOT NULL,
+                "requestDate" date NOT NULL,
+                month integer NOT NULL,
+                year integer NOT NULL,
+                status text NOT NULL DEFAULT 'PENDING',
+                notes text,
+                "createdAt" timestamptz NOT NULL DEFAULT now(),
+                "updatedAt" timestamptz NOT NULL DEFAULT now()
+              );
+              CREATE INDEX IF NOT EXISTS overtime_requests_userId_idx ON overtime_requests("userId");
+              CREATE INDEX IF NOT EXISTS overtime_requests_status_idx ON overtime_requests(status);
+              CREATE INDEX IF NOT EXISTS overtime_requests_createdAt_idx ON overtime_requests("createdAt");
+            `);
+
+            // Retry the original query once
+            if (session.user.role === 'ADMIN') {
+              const rows = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT o.*, u.name as user_name
+                 FROM overtime_requests o
+                 JOIN users u ON o."userId" = u.id
+                 WHERE o.status = 'PENDING'
+                 ORDER BY o."createdAt" DESC`
+              );
+              return NextResponse.json(rows);
+            } else {
+              const rows = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT *
+                 FROM overtime_requests
+                 WHERE "userId" = $1
+                 ORDER BY "createdAt" DESC`,
+                session.user.id
+              );
+              return NextResponse.json(rows);
+            }
+          } catch (createErr) {
+            console.error('Failed to create overtime_requests table during GET:', createErr);
+            return NextResponse.json([], { status: 200 });
+          }
         }
         console.error('Prisma error fetching overtime requests:', prismaError);
         return NextResponse.json({ error: 'Failed to fetch overtime requests' }, { status: 500 });
