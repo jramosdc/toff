@@ -58,7 +58,7 @@ export async function GET() {
           const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT o.*, u.name as user_name
              FROM overtime_requests o
-             JOIN users u ON o."userId" = u.id
+             JOIN "User" u ON o."userId" = u.id
              WHERE o.status = 'PENDING'
              ORDER BY o."createdAt" DESC`
           );
@@ -108,7 +108,7 @@ export async function GET() {
               const rows = await prisma.$queryRawUnsafe<any[]>(
                 `SELECT o.*, u.name as user_name
                  FROM overtime_requests o
-                 JOIN users u ON o."userId" = u.id
+                 JOIN "User" u ON o."userId" = u.id
                  WHERE o.status = 'PENDING'
                  ORDER BY o."createdAt" DESC`
               );
