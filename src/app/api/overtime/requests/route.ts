@@ -55,13 +55,13 @@ export async function GET() {
             console.warn('Prisma expected but not available in GET /overtime/requests');
             throw new Error('Prisma client unavailable');
           }
-          const rows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT o.*, u.name as user_name
-             FROM overtime_requests o
-             JOIN "User" u ON o."userId" = u.id
-             WHERE o.status = 'PENDING'
-             ORDER BY o."createdAt" DESC`
-          );
+          const rows = await prisma.$queryRaw<any[]>`
+            SELECT o.*, u.name as user_name
+            FROM overtime_requests o
+            JOIN "User" u ON o."userId" = u.id
+            WHERE o.status = 'PENDING'
+            ORDER BY o."createdAt" DESC
+          `;
           return NextResponse.json(rows);
         } else {
           if (!prisma) {
@@ -105,13 +105,13 @@ export async function GET() {
 
             // Retry the original query once
             if (session.user.role === 'ADMIN') {
-              const rows = await prisma.$queryRawUnsafe<any[]>(
-                `SELECT o.*, u.name as user_name
-                 FROM overtime_requests o
-                 JOIN "User" u ON o."userId" = u.id
-                 WHERE o.status = 'PENDING'
-                 ORDER BY o."createdAt" DESC`
-              );
+              const rows = await prisma.$queryRaw<any[]>`
+                SELECT o.*, u.name as user_name
+                FROM overtime_requests o
+                JOIN "User" u ON o."userId" = u.id
+                WHERE o.status = 'PENDING'
+                ORDER BY o."createdAt" DESC
+              `;
               return NextResponse.json(rows);
             } else {
               console.log('Overtime GET: user branch after create-table (Prisma)');
