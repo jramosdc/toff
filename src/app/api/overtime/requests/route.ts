@@ -222,7 +222,7 @@ export async function POST(request: Request) {
         stage = 'insert-overtime';
         await prisma.$executeRawUnsafe(
           `INSERT INTO overtime_requests (id, "userId", hours, "requestDate", month, year, status, notes)
-           VALUES ($1, $2, $3, $4::date, $5, $6, $7, $8)`,
+           VALUES ($1::uuid, $2::uuid, $3, $4::date, $5, $6, $7, $8)`,
           requestId,
           userIdToUse,
           hours,
@@ -264,7 +264,7 @@ export async function POST(request: Request) {
             // Retry insert once
             await prisma.$executeRawUnsafe(
               `INSERT INTO overtime_requests (id, "userId", hours, "requestDate", month, year, status, notes)
-               VALUES ($1, $2, $3, $4::date, $5, $6, $7, $8)`,
+               VALUES ($1::uuid, $2::uuid, $3, $4::date, $5, $6, $7, $8)`,
               requestId,
               userIdToUse,
               hours,
