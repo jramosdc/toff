@@ -245,9 +245,17 @@ describe('DashboardPage', () => {
     });
 
     it('should show warning when not in last week of month', () => {
+      // Make the current date deterministic and not in the last week
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2025-01-15T12:00:00Z'));
+
       render(<DashboardPage />);
-      
-      expect(screen.getByText('Overtime requests can only be submitted during the last week of the month.')).toBeInTheDocument();
+
+      expect(
+        screen.getByText('Overtime requests can only be submitted during the last week of the month.')
+      ).toBeInTheDocument();
+
+      vi.useRealTimers();
     });
   });
 

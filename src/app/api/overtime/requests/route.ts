@@ -46,17 +46,55 @@ export async function GET() {
   }
 
   try {
-    let requests;
-    
-    // If admin, get all pending requests
-    if (session.user.role === 'ADMIN') {
-      requests = dbOperations.getAllOvertimeRequests.all('PENDING');
-    } else {
-      // Otherwise, get only the user's requests
-      requests = dbOperations.getUserOvertimeRequests.all(session.user.id);
+    // Prefer Prisma on Vercel/production if available
+    if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
+      try {
+        if (session.user.role === 'ADMIN') {
+          // Pending only for admin view
+          const rows = await prisma!.$queryRawUnsafe<any[]>(
+            `SELECT o.*, u.name as user_name
+             FROM overtime_requests o
+             JOIN users u ON o."userId" = u.id
+             WHERE o.status = 'PENDING'
+             ORDER BY o."createdAt" DESC`
+          );
+          return NextResponse.json(rows);
+        } else {
+          const rows = await prisma!.$queryRawUnsafe<any[]>(
+            `SELECT *
+             FROM overtime_requests
+             WHERE "userId" = $1
+             ORDER BY "createdAt" DESC`,
+            session.user.id
+          );
+          return NextResponse.json(rows);
+        }
+      } catch (prismaError: any) {
+        // If table doesn't exist yet in Postgres, return empty gracefully
+        const message = String(prismaError?.message || prismaError);
+        if (message.includes('relation') && message.includes('does not exist')) {
+          console.warn('overtime_requests table not found; returning empty list');
+          return NextResponse.json([]);
+        }
+        console.error('Prisma error fetching overtime requests:', prismaError);
+        return NextResponse.json({ error: 'Failed to fetch overtime requests' }, { status: 500 });
+      }
     }
-    
-    return NextResponse.json(requests);
+
+    // SQLite fallback (local dev)
+    if (dbOperations) {
+      const sqliteOps = dbOperations as any;
+      let requests;
+      if (session.user.role === 'ADMIN') {
+        requests = sqliteOps.getOvertimeRequestsByStatus.all('PENDING');
+      } else {
+        requests = sqliteOps.getUserOvertimeRequests.all(session.user.id);
+      }
+      return NextResponse.json(requests);
+    }
+
+    // No DB available
+    return NextResponse.json([]);
   } catch (error) {
     console.error('Error fetching overtime requests:', error);
     return NextResponse.json({ error: 'Failed to fetch overtime requests' }, { status: 500 });
@@ -121,19 +159,19 @@ export async function POST(request: Request) {
           }, { status: 404 });
         }
         
-        // Create the overtime request with Prisma
-        await prisma?.overtimeRequest.create({
-          data: {
-            id: requestId,
-            userId: userIdToUse,
-            hours,
-            requestDate: new Date(requestDate),
-            month,
-            year,
-            status: 'PENDING',
-            notes: notes || null
-          }
-        });
+        // Create the overtime request using raw SQL (table managed outside Prisma schema)
+        await prisma!.$executeRawUnsafe(
+          `INSERT INTO overtime_requests (id, "userId", hours, "requestDate", month, year, status, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          requestId,
+          userIdToUse,
+          hours,
+          new Date(requestDate),
+          month,
+          year,
+          'PENDING',
+          notes || null
+        );
         console.log("Successfully created overtime request with Prisma");
       } catch (prismaError) {
         console.error("Prisma error:", prismaError);
@@ -142,7 +180,7 @@ export async function POST(request: Request) {
     } else if (db) {
       // Fallback to SQLite in development
       console.log("Using SQLite to create overtime request");
-      dbOperations.createOvertimeRequest.run(
+      (dbOperations as any).createOvertimeRequest.run(
         requestId,
         userIdToUse,
         hours,
@@ -166,7 +204,7 @@ export async function POST(request: Request) {
           where: { id: userIdToUse }
         });
       } else {
-        user = dbOperations.getUserById.get(userIdToUse) as User;
+        user = (dbOperations as any).getUserById.get(userIdToUse) as User;
       }
       
       if (!user) {
@@ -207,7 +245,7 @@ export async function POST(request: Request) {
         }
       } else {
         // Get admin users with SQLite
-        const adminUsers = dbOperations.getAdminUsers.all() as AdminUser[];
+        const adminUsers = (dbOperations as any).getAdminUsers.all() as AdminUser[];
         
         for (const admin of adminUsers) {
           await sendOvertimeRequestNotification({

@@ -28,10 +28,16 @@ export const LoginSchema = z.object({
 const AllowedTimeOffTypes = ['VACATION', 'SICK', 'PAID_LEAVE', 'PERSONAL'] as const;
 const AllowedStatuses = ['PENDING', 'APPROVED', 'REJECTED'] as const;
 
+// Helper: accept either RFC3339 datetime or simple YYYY-MM-DD strings
+const isParsableDateString = (value: string) => {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  return !Number.isNaN(Date.parse(value));
+};
+
 export const CreateTimeOffRequestSchema = z.object({
   userId: z.string().uuid('Invalid uuid'),
-  startDate: z.string().datetime('Invalid date'),
-  endDate: z.string().datetime('Invalid date'),
+  startDate: z.string().refine(isParsableDateString, 'Invalid date'),
+  endDate: z.string().refine(isParsableDateString, 'Invalid date'),
   type: z.string().refine((v) => (AllowedTimeOffTypes as readonly string[]).includes(v), { message: 'Invalid enum value' }),
   reason: z.string().min(1, 'Reason is required').max(500, 'Reason must be less than 500 characters').optional()
 }).refine(

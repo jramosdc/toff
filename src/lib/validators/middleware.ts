@@ -28,7 +28,11 @@ export function validateRequest<T>(
     return { success: true, data: validatedData };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errors: ValidationError[] = error.errors.map(err => ({
+      // Zod v4 exposes validation items on `.issues`. Some environments or
+      // older versions use `.errors`. Use a safe fallback to avoid runtime
+      // TypeErrors when mapping the collection.
+      const rawIssues: any[] = (error as any).issues ?? (error as any).errors ?? [];
+      const errors: ValidationError[] = rawIssues.map((err: any) => ({
         field: err.path.join('.'),
         message: err.message,
         code: 'VALIDATION_ERROR'
