@@ -84,8 +84,9 @@ export async function GET() {
           console.warn('overtime_requests table not found; attempting to create and retry');
           try {
             if (!prisma) throw new Error('Prisma client unavailable for create-table');
-            await prisma.$executeRawUnsafe(`
-              CREATE TABLE IF NOT EXISTS overtime_requests (
+            // Execute statements separately; Postgres prepared statements cannot contain multiple commands
+            await prisma.$executeRawUnsafe(
+              `CREATE TABLE IF NOT EXISTS overtime_requests (
                 id uuid PRIMARY KEY,
                 "userId" uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 hours double precision NOT NULL,
@@ -96,11 +97,11 @@ export async function GET() {
                 notes text,
                 "createdAt" timestamptz NOT NULL DEFAULT now(),
                 "updatedAt" timestamptz NOT NULL DEFAULT now()
-              );
-              CREATE INDEX IF NOT EXISTS overtime_requests_userId_idx ON overtime_requests("userId");
-              CREATE INDEX IF NOT EXISTS overtime_requests_status_idx ON overtime_requests(status);
-              CREATE INDEX IF NOT EXISTS overtime_requests_createdAt_idx ON overtime_requests("createdAt");
-            `);
+              )`
+            );
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_userId_idx ON overtime_requests("userId")`);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_status_idx ON overtime_requests(status)`);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_createdAt_idx ON overtime_requests("createdAt")`);
 
             // Retry the original query once
             if (session.user.role === 'ADMIN') {
@@ -242,8 +243,8 @@ export async function POST(request: Request) {
             if (!prisma) {
               throw new Error('Prisma client unavailable for create-table');
             }
-            await prisma.$executeRawUnsafe(`
-              CREATE TABLE IF NOT EXISTS overtime_requests (
+            await prisma.$executeRawUnsafe(
+              `CREATE TABLE IF NOT EXISTS overtime_requests (
                 id uuid PRIMARY KEY,
                 "userId" uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 hours double precision NOT NULL,
@@ -254,11 +255,11 @@ export async function POST(request: Request) {
                 notes text,
                 "createdAt" timestamptz NOT NULL DEFAULT now(),
                 "updatedAt" timestamptz NOT NULL DEFAULT now()
-              );
-              CREATE INDEX IF NOT EXISTS overtime_requests_userId_idx ON overtime_requests("userId");
-              CREATE INDEX IF NOT EXISTS overtime_requests_status_idx ON overtime_requests(status);
-              CREATE INDEX IF NOT EXISTS overtime_requests_createdAt_idx ON overtime_requests("createdAt");
-            `);
+              )`
+            );
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_userId_idx ON overtime_requests("userId")`);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_status_idx ON overtime_requests(status)`);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_createdAt_idx ON overtime_requests("createdAt")`);
 
             // Retry insert once
             await prisma.$executeRawUnsafe(
