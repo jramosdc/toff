@@ -51,7 +51,11 @@ export async function GET() {
       try {
         if (session.user.role === 'ADMIN') {
           // Pending only for admin view
-          const rows = await prisma!.$queryRawUnsafe<any[]>(
+          if (!prisma) {
+            console.warn('Prisma expected but not available in GET /overtime/requests');
+            throw new Error('Prisma client unavailable');
+          }
+          const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT o.*, u.name as user_name
              FROM overtime_requests o
              JOIN users u ON o."userId" = u.id
@@ -60,7 +64,11 @@ export async function GET() {
           );
           return NextResponse.json(rows);
         } else {
-          const rows = await prisma!.$queryRawUnsafe<any[]>(
+          if (!prisma) {
+            console.warn('Prisma expected but not available in GET /overtime/requests');
+            throw new Error('Prisma client unavailable');
+          }
+          const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT *
              FROM overtime_requests
              WHERE "userId" = $1
@@ -94,6 +102,7 @@ export async function GET() {
     }
 
     // No DB available
+    console.warn('No database connection available in GET /overtime/requests');
     return NextResponse.json([]);
   } catch (error) {
     console.error('Error fetching overtime requests:', error);
@@ -148,7 +157,11 @@ export async function POST(request: Request) {
       console.log("Using Prisma to create overtime request");
       try {
         // First verify the user exists in the database
-        const userExists = await prisma?.user.findUnique({
+        if (!prisma) {
+          console.error('Prisma expected but not available in POST /overtime/requests');
+          throw new Error('Prisma client unavailable');
+        }
+        const userExists = await prisma.user.findUnique({
           where: { id: userIdToUse }
         });
         
@@ -160,7 +173,7 @@ export async function POST(request: Request) {
         }
         
         // Create the overtime request using raw SQL (table managed outside Prisma schema)
-        await prisma!.$executeRawUnsafe(
+        await prisma.$executeRawUnsafe(
           `INSERT INTO overtime_requests (id, "userId", hours, "requestDate", month, year, status, notes)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           requestId,
@@ -191,7 +204,8 @@ export async function POST(request: Request) {
         notes || null
       );
     } else {
-      throw new Error("No database connection available");
+      console.error('No database connection available in POST /overtime/requests');
+      return NextResponse.json({ error: 'No database connection available' }, { status: 500 });
     }
 
     // Send email notifications to all admin users
