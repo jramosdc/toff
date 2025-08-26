@@ -71,7 +71,7 @@ export async function GET() {
           const rows = await prisma.$queryRawUnsafe<any[]>(
             `SELECT *
              FROM overtime_requests
-             WHERE "userId" = $1
+             WHERE "userId" = $1::uuid
              ORDER BY "createdAt" DESC`,
             session.user.id
           );
@@ -117,7 +117,7 @@ export async function GET() {
               const rows = await prisma.$queryRawUnsafe<any[]>(
                 `SELECT *
                  FROM overtime_requests
-                 WHERE "userId" = $1
+                 WHERE "userId" = $1::uuid
                  ORDER BY "createdAt" DESC`,
                 session.user.id
               );
