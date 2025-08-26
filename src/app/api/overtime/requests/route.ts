@@ -192,6 +192,52 @@ export async function POST(request: Request) {
       } catch (prismaError: any) {
         console.error(`Prisma error at stage ${stage}:`, prismaError);
         const message = prismaError?.message || String(prismaError);
+        // Auto-create table if missing, then retry once
+        if (stage === 'insert-overtime' && message.includes('relation') && message.includes('does not exist')) {
+          console.warn('overtime_requests table missing; attempting to create it and retry insert');
+          try {
+            if (!prisma) {
+              throw new Error('Prisma client unavailable for create-table');
+            }
+            await prisma.$executeRawUnsafe(`
+              CREATE TABLE IF NOT EXISTS overtime_requests (
+                id uuid PRIMARY KEY,
+                "userId" uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                hours double precision NOT NULL,
+                "requestDate" date NOT NULL,
+                month integer NOT NULL,
+                year integer NOT NULL,
+                status text NOT NULL DEFAULT 'PENDING',
+                notes text,
+                "createdAt" timestamptz NOT NULL DEFAULT now(),
+                "updatedAt" timestamptz NOT NULL DEFAULT now()
+              );
+              CREATE INDEX IF NOT EXISTS overtime_requests_userId_idx ON overtime_requests("userId");
+              CREATE INDEX IF NOT EXISTS overtime_requests_status_idx ON overtime_requests(status);
+              CREATE INDEX IF NOT EXISTS overtime_requests_createdAt_idx ON overtime_requests("createdAt");
+            `);
+
+            // Retry insert once
+            await prisma.$executeRawUnsafe(
+              `INSERT INTO overtime_requests (id, "userId", hours, "requestDate", month, year, status, notes)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              requestId,
+              userIdToUse,
+              hours,
+              new Date(requestDate),
+              month,
+              year,
+              'PENDING',
+              notes || null
+            );
+            console.log('Created overtime_requests table and retried insert successfully');
+          } catch (createTableError: any) {
+            console.error('Failed to create overtime_requests table or retry insert:', createTableError);
+            const msg = createTableError?.message || String(createTableError);
+            throw new Error(`Stage ${stage} failed after create-table attempt: ${msg}`);
+          }
+          return; // success path after retry
+        }
         throw new Error(`Stage ${stage} failed: ${message}`);
       }
     } else if (db) {
