@@ -75,6 +75,9 @@ export default function AdminPage() {
   const [showAddUser, setShowAddUser] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [highlightedRequestId, setHighlightedRequestId] = useState<string | null>(null);
+  const [whoDate, setWhoDate] = useState<string>('');
+  const [whoOff, setWhoOff] = useState<Array<{ userId: string; name: string; email: string; type: string; startDate: string; endDate: string }>>([]);
+  const [whoLoading, setWhoLoading] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -152,6 +155,22 @@ export default function AdminPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWhoIsOff = async () => {
+    setWhoLoading(true);
+    try {
+      const dateParam = whoDate || new Date().toISOString().split('T')[0];
+      const res = await fetch(`/api/admin/who-is-off?date=${dateParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        setWhoOff(data);
+      } else {
+        setWhoOff([]);
+      }
+    } finally {
+      setWhoLoading(false);
     }
   };
 
@@ -399,6 +418,40 @@ export default function AdminPage() {
               </form>
             </div>
           )}
+        </div>
+
+        {/* Who is off */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+          <div className="px-4 py-5 sm:px-6">
+            <h2 className="text-lg font-medium text-gray-900">Who is off</h2>
+            <p className="mt-1 text-sm text-gray-500">Check who is taking time off on a specific day.</p>
+            <div className="mt-4 flex items-center space-x-2">
+              <input
+                type="date"
+                value={whoDate}
+                onChange={(e) => setWhoDate(e.target.value)}
+                className="border border-gray-300 rounded-md p-2"
+              />
+              <button
+                onClick={fetchWhoIsOff}
+                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                disabled={whoLoading}
+              >
+                {whoLoading ? 'Checking…' : 'Check'}
+              </button>
+            </div>
+            <div className="mt-4">
+              {whoOff.length === 0 ? (
+                <div className="text-sm text-gray-700">No one is taking time off</div>
+              ) : (
+                <ul className="list-disc list-inside text-sm text-gray-800">
+                  {whoOff.map(item => (
+                    <li key={`${item.userId}-${item.startDate}`}>{item.name} — {item.type.replace('_',' ')} ({new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()})</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Pending Overtime Requests Section */}
