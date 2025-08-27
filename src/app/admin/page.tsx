@@ -73,6 +73,7 @@ export default function AdminPage() {
     role: 'EMPLOYEE',
   });
   const [showAddUser, setShowAddUser] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [highlightedRequestId, setHighlightedRequestId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -151,6 +152,23 @@ export default function AdminPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteUser = async (user: User) => {
+    if (!confirm(`Delete ${user.name}? This will remove their balances and requests.`)) return;
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Failed to delete user');
+        return;
+      }
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+    } catch (e) {
+      setError('An error occurred while deleting user');
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -558,6 +576,16 @@ export default function AdminPage() {
                           className="text-indigo-600 hover:text-indigo-900 mr-4"
                         >
                           View Details
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDeletingUserId(user.id);
+                            deleteUser(user);
+                          }}
+                          disabled={deletingUserId === user.id}
+                          className={deletingUserId === user.id ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:text-red-900'}
+                        >
+                          {deletingUserId === user.id ? 'Deleting…' : 'Delete'}
                         </button>
                       </td>
                     </tr>

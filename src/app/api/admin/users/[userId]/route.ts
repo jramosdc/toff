@@ -63,4 +63,44 @@ export async function GET(
     console.error('Error fetching user:', error);
     return NextResponse.json({ error: `Failed to fetch user: ${error}` }, { status: 500 });
   }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { userId: string } }
+) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const userId = params.userId;
+
+  // Prevent self-delete
+  if (session.user.id === userId) {
+    return NextResponse.json({ error: 'You cannot delete your own account.' }, { status: 400 });
+  }
+
+  try {
+    if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
+      // Hard delete with cascade (schema uses onDelete: Cascade)
+      await prisma!.user.delete({ where: { id: userId } });
+      return NextResponse.json({ success: true });
+    }
+
+    if (db && (dbOperations as any)?.getUserById) {
+      // SQLite fallback: manual cascade deletes if necessary
+      (db as any).prepare('DELETE FROM time_off_requests WHERE userId = ?').run(userId);
+      (db as any).prepare('DELETE FROM time_off_balance WHERE userId = ?').run(userId);
+      (db as any).prepare('DELETE FROM overtime_requests WHERE userId = ?').run(userId);
+      (db as any).prepare('DELETE FROM users WHERE id = ?').run(userId);
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: 'No database connection available' }, { status: 500 });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return NextResponse.json({ error: `Failed to delete user: ${error}` }, { status: 500 });
+  }
 } 

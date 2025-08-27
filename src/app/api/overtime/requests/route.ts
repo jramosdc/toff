@@ -168,18 +168,6 @@ export async function POST(request: Request) {
           }, { status: 404 });
         }
         
-        // Prevent duplicate overtime for the same calendar day
-        const existing = await prisma.$queryRaw<any[]>`
-          SELECT id FROM overtime_requests
-          WHERE "userId" = ${userIdToUse}::uuid AND "requestDate" = ${requestDate}::date
-          LIMIT 1
-        `;
-        if (Array.isArray(existing) && existing.length > 0) {
-          return NextResponse.json({
-            error: 'You already submitted an overtime request for today. Please wait for approval or choose another day.'
-          }, { status: 409 });
-        }
-
         // Create the overtime request with raw SQL (managed by Prisma model/migration in DB)
         stage = 'insert-overtime';
         await prisma.$executeRawUnsafe(
