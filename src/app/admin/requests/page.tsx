@@ -162,6 +162,12 @@ export default function AllRequestsPage() {
   };
 
   const updateOvertimeStatus = async (requestId: string, newStatus: 'APPROVED' | 'REJECTED') => {
+    if (newStatus === 'APPROVED') {
+      const req = overtimeRequests.find(r => r.id === requestId);
+      const days = req ? (req.hours / 8).toFixed(2) : undefined;
+      const ok = typeof window !== 'undefined' ? window.confirm(`Approve this overtime? This will add ${days ?? '?'} day(s) to VACATION.`) : true;
+      if (!ok) return;
+    }
     setProcessingRequests(prev => new Set(prev).add(requestId));
     const original = [...overtimeRequests];
     setOvertimeRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: newStatus } : r));

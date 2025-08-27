@@ -136,6 +136,7 @@ export default function DashboardPage() {
   });
   const [overtimeError, setOvertimeError] = useState('');
   const [isLastWeek, setIsLastWeek] = useState(false);
+  const [isSubmittingOvertime, setIsSubmittingOvertime] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -260,6 +261,10 @@ export default function DashboardPage() {
     e.preventDefault();
     setOvertimeError('');
     
+    if (isSubmittingOvertime) {
+      return;
+    }
+
     if (!session?.user?.id) {
       setOvertimeError('User ID not found in session');
       return;
@@ -276,6 +281,11 @@ export default function DashboardPage() {
     }
     
     try {
+      const confirmMsg = `Submit ${newOvertimeRequest.hours} hour(s) of overtime? This equals ${(newOvertimeRequest.hours / 8).toFixed(2)} day(s).`;
+      const confirmed = typeof window !== 'undefined' ? window.confirm(confirmMsg) : true;
+      if (!confirmed) return;
+
+      setIsSubmittingOvertime(true);
       // Add userId to the request data
       const requestData = {
         ...newOvertimeRequest,
@@ -299,13 +309,20 @@ export default function DashboardPage() {
           notes: '',
         });
         fetchOvertimeRequests();
+        alert('Overtime request submitted. Awaiting approval.');
       } else {
         const data = await response.json();
-        setOvertimeError(data.error || 'Failed to submit overtime request');
+        if (response.status === 409) {
+          alert(data.error || 'Duplicate overtime request for the same day.');
+        } else {
+          setOvertimeError(data.error || 'Failed to submit overtime request');
+        }
       }
     } catch (err) {
       setOvertimeError('An error occurred while submitting the request');
       console.error(err);
+    } finally {
+      setIsSubmittingOvertime(false);
     }
   };
 
@@ -588,12 +605,12 @@ export default function DashboardPage() {
                   <div>
                     <button
                       type="submit"
-                      disabled={!isLastWeek}
+                      disabled={!isLastWeek || isSubmittingOvertime}
                       className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white ${
-                        isLastWeek ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'
+                        isLastWeek && !isSubmittingOvertime ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'
                       } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
                     >
-                      Submit Overtime Request
+                      {isSubmittingOvertime ? 'Submitting…' : 'Submit Overtime Request'}
                     </button>
                   </div>
                 </form>
