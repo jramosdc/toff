@@ -58,6 +58,7 @@ model User {
   auditLogs       AuditLog[]
   timeOffBalances TimeOffBalance[]
   timeOffRequests TimeOffRequest[]
+  overtimeRequests OvertimeRequest[] @relation("UserToOvertimeRequests")
   accounts        Account[]
   sessions        Session[]
 
@@ -122,7 +123,7 @@ model AuditLog {
 model OvertimeRequest {
   id          String        @id @default(uuid())
   userId      String
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User          @relation("UserToOvertimeRequests", fields: [userId], references: [id], onDelete: Cascade)
   hours       Float
   requestDate DateTime      @db.Date
   month       Int
