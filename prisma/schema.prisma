@@ -58,6 +58,7 @@ model User {
   auditLogs       AuditLog[]
   timeOffBalances TimeOffBalance[]
   timeOffRequests TimeOffRequest[]
+  overtimeRequests OvertimeRequest[] @relation("UserToOvertimeRequests")
   accounts        Account[]
   sessions        Session[]
 
@@ -116,6 +117,27 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@index([action])
+}
+
+/// Overtime requests stored in Postgres and managed by Prisma
+model OvertimeRequest {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation("UserToOvertimeRequests", fields: [userId], references: [id], onDelete: Cascade)
+  hours       Float
+  requestDate DateTime      @db.Date
+  month       Int
+  year        Int
+  status      RequestStatus @default(PENDING)
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("overtime_requests")
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@unique([userId, requestDate], name: "unique_overtime_per_day")
 }
 
 enum UserRole {

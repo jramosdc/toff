@@ -16,6 +16,18 @@ interface TimeOffRequest {
   reason?: string;
 }
 
+interface OvertimeRequest {
+  id: string;
+  user_id?: string;
+  user_name?: string;
+  hours: number;
+  request_date: string;
+  month: number;
+  year: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  notes?: string;
+}
+
 // Helper function to safely format dates
 const formatDate = (dateString: string) => {
   try {
@@ -39,6 +51,7 @@ export default function AllRequestsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [requests, setRequests] = useState<TimeOffRequest[]>([]);
+  const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -52,6 +65,7 @@ export default function AllRequestsPage() {
       router.push('/dashboard');
     } else if (status === 'authenticated') {
       fetchRequests();
+      fetchOvertime();
     }
   }, [session, status, router, currentYear, statusFilter]);
 
@@ -77,6 +91,18 @@ export default function AllRequestsPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchOvertime = async () => {
+    try {
+      const res = await fetch('/api/overtime/requests');
+      if (res.ok) {
+        const data = await res.json();
+        setOvertimeRequests(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch overtime requests', err);
     }
   };
 
@@ -132,6 +158,31 @@ export default function AllRequestsPage() {
         newSet.delete(requestId);
         return newSet;
       });
+    }
+  };
+
+  const updateOvertimeStatus = async (requestId: string, newStatus: 'APPROVED' | 'REJECTED') => {
+    setProcessingRequests(prev => new Set(prev).add(requestId));
+    const original = [...overtimeRequests];
+    setOvertimeRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: newStatus } : r));
+    try {
+      const res = await fetch(`/api/overtime/requests/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to update overtime status');
+      }
+      setError('');
+      await fetchRequests(); // refresh balances-related view if needed
+      await fetchOvertime();
+    } catch (err) {
+      setOvertimeRequests(original);
+      console.error('Error updating overtime status', err);
+    } finally {
+      setProcessingRequests(prev => { const s = new Set(prev); s.delete(requestId); return s; });
     }
   };
 
@@ -325,6 +376,73 @@ export default function AllRequestsPage() {
                     <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
                       No time off requests found with the selected filters.
                     </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Overtime Requests Table */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg mt-8">
+          <div className="p-4">
+            <h2 className="text-xl font-semibold mb-2">Overtime Requests</h2>
+            <p className="text-sm text-gray-600 mb-4">Approve to add equivalent vacation days (hours ÷ 8) to the employee's balance.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Hours</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Equivalent Days</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Notes</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {overtimeRequests.length > 0 ? (
+                  overtimeRequests.map((r) => (
+                    <tr key={r.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{r.request_date}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{r.hours}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{(r.hours / 8).toFixed(2)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          r.status === 'APPROVED' ? 'bg-green-100 text-green-800' : r.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{r.notes || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        {r.status === 'PENDING' ? (
+                          <>
+                            <button
+                              onClick={() => updateOvertimeStatus(r.id, 'APPROVED')}
+                              disabled={processingRequests.has(r.id)}
+                              className={`mr-4 ${processingRequests.has(r.id) ? 'text-gray-400 cursor-not-allowed' : 'text-green-600 hover:text-green-900'}`}
+                            >
+                              {processingRequests.has(r.id) ? 'Processing...' : 'Approve'}
+                            </button>
+                            <button
+                              onClick={() => updateOvertimeStatus(r.id, 'REJECTED')}
+                              disabled={processingRequests.has(r.id)}
+                              className={`${processingRequests.has(r.id) ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:text-red-900'}`}
+                            >
+                              {processingRequests.has(r.id) ? 'Processing...' : 'Reject'}
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-gray-500">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">No overtime requests found.</td>
                   </tr>
                 )}
               </tbody>

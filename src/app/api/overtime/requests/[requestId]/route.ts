@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { dbOperations } from '@/lib/db';
-import db from '@/lib/db';
+import db, { prisma, isPrismaEnabled, dbOperations } from '@/lib/db';
 import { sendRequestStatusNotification } from '@/lib/email';
 
 interface OvertimeRequest {
@@ -44,32 +43,105 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    // Get the specific overtime request by ID
-    // We need to create a custom query for this since it's not in our prepared statements
-    const overtimeRequest = db.prepare(`
-      SELECT * FROM overtime_requests WHERE id = ? AND status = 'PENDING'
-    `).get(requestId) as OvertimeRequest | undefined;
-    
-    if (!overtimeRequest) {
-      return NextResponse.json({ error: 'Overtime request not found or not pending' }, { status: 404 });
-    }
+    let overtimeRequest: OvertimeRequest | undefined;
 
-    // Update the status
-    dbOperations.updateOvertimeRequestStatus.run(status, requestId);
+    if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
+      // Prisma/Postgres path
+      if (!prisma) {
+        return NextResponse.json({ error: 'Database unavailable' }, { status: 500 });
+      }
 
-    // If approved, add vacation days
-    if (status === 'APPROVED') {
-      dbOperations.addVacationDaysFromOvertime(
-        overtimeRequest.user_id,
-        overtimeRequest.hours,
-        overtimeRequest.year
+      // Fetch pending request
+      const rows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT id, "userId" as user_id, hours, to_char("requestDate", 'YYYY-MM-DD') as request_date, month, year, status, notes
+         FROM overtime_requests
+         WHERE id = $1::uuid AND status = 'PENDING'`,
+        requestId
       );
+      overtimeRequest = rows?.[0];
+
+      if (!overtimeRequest) {
+        return NextResponse.json({ error: 'Overtime request not found or not pending' }, { status: 404 });
+      }
+
+      // Update status
+      await prisma.$executeRawUnsafe(
+        `UPDATE overtime_requests SET status = $1, "updatedAt" = now() WHERE id = $2::uuid`,
+        status,
+        requestId
+      );
+
+      // If approved, add vacation days (hours/8) to TimeOffBalance for current year and VACATION
+      if (status === 'APPROVED') {
+        const daysToAdd = overtimeRequest.hours / 8;
+        // Update then create fallback to avoid compound unique typings
+        const existing = await prisma.timeOffBalance.findFirst({
+          where: { userId: overtimeRequest.user_id, year: overtimeRequest.year, type: 'VACATION' }
+        });
+        if (existing) {
+          await prisma.timeOffBalance.update({
+            where: { id: existing.id },
+            data: {
+              totalDays: { increment: daysToAdd },
+              remainingDays: { increment: daysToAdd }
+            }
+          });
+        } else {
+          await prisma.timeOffBalance.create({
+            data: {
+              userId: overtimeRequest.user_id,
+              year: overtimeRequest.year,
+              type: 'VACATION',
+              totalDays: daysToAdd,
+              usedDays: 0,
+              remainingDays: daysToAdd
+            }
+          });
+        }
+      }
+    } else {
+      // SQLite path (local dev)
+      // Get the specific overtime request by ID
+      if (!db) {
+        return NextResponse.json({ error: 'Database unavailable' }, { status: 500 });
+      }
+      const sqliteRequest = db.prepare(`
+        SELECT * FROM overtime_requests WHERE id = ? AND status = 'PENDING'
+      `).get(requestId) as OvertimeRequest | undefined;
+      
+      if (!sqliteRequest) {
+        return NextResponse.json({ error: 'Overtime request not found or not pending' }, { status: 404 });
+      }
+      overtimeRequest = sqliteRequest;
+
+      // Update the status
+      if (!dbOperations) {
+        return NextResponse.json({ error: 'Database operations unavailable' }, { status: 500 });
+      }
+      dbOperations.updateOvertimeRequestStatus.run(status, requestId);
+
+      // If approved, add vacation days
+      if (status === 'APPROVED') {
+        dbOperations.addVacationDaysFromOvertime(
+          overtimeRequest.user_id,
+          overtimeRequest.hours,
+          overtimeRequest.year
+        );
+      }
     }
 
     // Send email notification to the employee
     try {
       // Get employee details
-      const user = dbOperations.getUserById.get(overtimeRequest.user_id) as User;
+      let user: User | undefined;
+      if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
+        const row = await prisma?.user.findUnique({ where: { id: overtimeRequest.user_id } });
+        if (row) {
+          user = { id: row.id, email: row.email, name: row.name, role: row.role } as unknown as User;
+        }
+      } else {
+        user = (dbOperations as any).getUserById.get(overtimeRequest.user_id) as User;
+      }
       
       if (user) {
         await sendRequestStatusNotification({

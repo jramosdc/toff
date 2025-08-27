@@ -9,6 +9,8 @@ const db = new Database(path.join(process.cwd(), 'toff.db'), { verbose: console.
 async function createAdmin() {
   const adminId = crypto.randomUUID();
   const hashedPassword = await bcrypt.hash('admin123', 10);
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
+  const adminName = process.env.ADMIN_NAME || 'Admin User';
 
   try {
     // Create user
@@ -19,14 +21,14 @@ async function createAdmin() {
 
     createUser.run(
       adminId,
-      'admin@example.com',
-      'Admin User',
+      adminEmail,
+      adminName,
       hashedPassword,
       'ADMIN'
     );
 
     console.log('Admin user created successfully');
-    console.log('Email: admin@example.com');
+    console.log('Email:', adminEmail);
     console.log('Password: admin123');
   } catch (error) {
     console.error('Error creating admin user:', error);

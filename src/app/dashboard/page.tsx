@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { DashboardErrorBoundary } from '@/components/DashboardErrorBoundary';
 
 interface TimeOffBalance {
   vacationDays: number;
@@ -70,6 +71,49 @@ const formatDate = (dateString: string) => {
   } catch (error) {
     console.error('Error formatting date:', dateString, error);
     return 'Invalid Date';
+  }
+};
+
+// Enhanced date validation and formatting
+const formatDateWithValidation = (dateString: string): { display: string; isValid: boolean; error?: string } => {
+  try {
+    if (!dateString) {
+      return { display: 'No Date', isValid: false, error: 'Date string is empty' };
+    }
+    
+    const date = new Date(dateString);
+    
+    if (isNaN(date.getTime())) {
+      return { display: 'Invalid Date', isValid: false, error: 'Unable to parse date' };
+    }
+    
+    // Check for reasonable date range (not too far in past or future)
+    const now = new Date();
+    const minDate = new Date(1900, 0, 1);
+    const maxDate = new Date(2100, 11, 31);
+    
+    if (date < minDate) {
+      return { display: 'Date Too Old', isValid: false, error: 'Date is before 1900' };
+    }
+    
+    if (date > maxDate) {
+      return { display: 'Date Too Far', isValid: false, error: 'Date is after 2100' };
+    }
+    
+    const formattedDate = date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+    
+    return { display: formattedDate, isValid: true };
+  } catch (error) {
+    console.error('Error formatting date:', dateString, error);
+    return { 
+      display: 'Error', 
+      isValid: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
   }
 };
 
@@ -287,299 +331,403 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">
-            Time Off Dashboard
-            {session?.user?.role === 'ADMIN' && (
-              <button
-                onClick={() => router.push('/admin')}
-                className="ml-4 px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
-              >
-                Admin Panel
-              </button>
+    <DashboardErrorBoundary>
+      <div className="min-h-screen bg-gray-100">
+        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          <div className="px-4 py-6 sm:px-0">
+            <h1 className="text-3xl font-bold text-gray-900 mb-8">
+              Time Off Dashboard
+              {session?.user?.role === 'ADMIN' && (
+                <button
+                  onClick={() => router.push('/admin')}
+                  className="ml-4 px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                >
+                  Admin Panel
+                </button>
+              )}
+            </h1>
+
+            {/* Balance Display */}
+            {balance && (
+              <div className="bg-white overflow-hidden shadow rounded-lg mb-8">
+                <div className="px-4 py-5 sm:p-6">
+                  <h2 className="text-lg font-medium text-gray-900 mb-4">
+                    Time Off Balance Summary
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Vacation Days */}
+                    <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-400">
+                      <p className="text-sm font-medium text-gray-700">Vacation Days</p>
+                      <div className="flex items-end mt-1">
+                        <p className="text-3xl font-semibold text-blue-600">
+                          {balance.vacationDays}
+                        </p>
+                        <p className="text-sm text-gray-500 ml-2 mb-1">
+                          / {(balance.vacationDays || 0) + (usedDays?.vacationDays || 0)}
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {usedDays?.vacationDays ? `${usedDays.vacationDays} days used` : 'No days used'}
+                      </p>
+                    </div>
+                    
+                    {/* Sick Days */}
+                    <div className="bg-green-50 rounded-lg p-4 border-l-4 border-green-400">
+                      <p className="text-sm font-medium text-gray-700">Sick Days</p>
+                      <div className="flex items-end mt-1">
+                        <p className="text-3xl font-semibold text-green-600">
+                          {balance.sickDays}
+                        </p>
+                        <p className="text-sm text-gray-500 ml-2 mb-1">
+                          / {(balance.sickDays || 0) + (usedDays?.sickDays || 0)}
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {usedDays?.sickDays ? `${usedDays.sickDays} days used` : 'No days used'}
+                      </p>
+                    </div>
+                    
+                    {/* Paid Leave */}
+                    <div className="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-400">
+                      <p className="text-sm font-medium text-gray-700">Paid Leave</p>
+                      <div className="flex items-end mt-1">
+                        <p className="text-3xl font-semibold text-purple-600">
+                          {balance.paidLeave}
+                        </p>
+                        <p className="text-sm text-gray-500 ml-2 mb-1">
+                          / {(balance.paidLeave || 0) + (usedDays?.paidLeave || 0)}
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {usedDays?.paidLeave ? `${usedDays.paidLeave} days used` : 'No days used'}
+                      </p>
+                    </div>
+                    
+                    {/* Personal Days */}
+                    <div className="bg-amber-50 rounded-lg p-4 border-l-4 border-amber-400">
+                      <p className="text-sm font-medium text-gray-700">Personal Days</p>
+                      <div className="flex items-end mt-1">
+                        <p className="text-3xl font-semibold text-amber-600">
+                          {balance.personalDays || 0}
+                        </p>
+                        <p className="text-sm text-gray-500 ml-2 mb-1">
+                          / {(balance.personalDays || 0) + (usedDays?.personalDays || 0)}
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {usedDays?.personalDays ? `${usedDays.personalDays} days used` : 'No days used'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
-          </h1>
 
-          {/* Balance Display */}
-          {balance && (
-            <div className="bg-white overflow-hidden shadow rounded-lg mb-8">
-              <div className="px-4 py-5 sm:p-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">
-                  Time Off Balance Summary
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  {/* Vacation Days */}
-                  <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-400">
-                    <p className="text-sm font-medium text-gray-700">Vacation Days</p>
-                    <div className="flex items-end mt-1">
-                      <p className="text-3xl font-semibold text-blue-600">
-                        {balance.vacationDays}
-                      </p>
-                      <p className="text-sm text-gray-500 ml-2 mb-1">
-                        / {(balance.vacationDays || 0) + (usedDays?.vacationDays || 0)}
-                      </p>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {usedDays?.vacationDays ? `${usedDays.vacationDays} days used` : 'No days used'}
-                    </p>
-                  </div>
-                  
-                  {/* Sick Days */}
-                  <div className="bg-green-50 rounded-lg p-4 border-l-4 border-green-400">
-                    <p className="text-sm font-medium text-gray-700">Sick Days</p>
-                    <div className="flex items-end mt-1">
-                      <p className="text-3xl font-semibold text-green-600">
-                        {balance.sickDays}
-                      </p>
-                      <p className="text-sm text-gray-500 ml-2 mb-1">
-                        / {(balance.sickDays || 0) + (usedDays?.sickDays || 0)}
-                      </p>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {usedDays?.sickDays ? `${usedDays.sickDays} days used` : 'No days used'}
-                    </p>
-                  </div>
-                  
-                  {/* Paid Leave */}
-                  <div className="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-400">
-                    <p className="text-sm font-medium text-gray-700">Paid Leave</p>
-                    <div className="flex items-end mt-1">
-                      <p className="text-3xl font-semibold text-purple-600">
-                        {balance.paidLeave}
-                      </p>
-                      <p className="text-sm text-gray-500 ml-2 mb-1">
-                        / {(balance.paidLeave || 0) + (usedDays?.paidLeave || 0)}
-                      </p>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {usedDays?.paidLeave ? `${usedDays.paidLeave} days used` : 'No days used'}
-                    </p>
-                  </div>
-                  
-                  {/* Personal Days */}
-                  <div className="bg-amber-50 rounded-lg p-4 border-l-4 border-amber-400">
-                    <p className="text-sm font-medium text-gray-700">Personal Days</p>
-                    <div className="flex items-end mt-1">
-                      <p className="text-3xl font-semibold text-amber-600">
-                        {balance.personalDays || 0}
-                      </p>
-                      <p className="text-sm text-gray-500 ml-2 mb-1">
-                        / {(balance.personalDays || 0) + (usedDays?.personalDays || 0)}
-                      </p>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {usedDays?.personalDays ? `${usedDays.personalDays} days used` : 'No days used'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* New Request Form */}
-          <div className="bg-white shadow rounded-lg mb-8">
-            <div className="px-4 py-5 sm:p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
-                Request Time Off
-              </h2>
-              <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-blue-700">
-                      <strong>Note:</strong> Weekends and holidays are automatically excluded from time off calculations, including:
-                    </p>
-                    <ul className="text-sm text-blue-700 mt-1 list-disc list-inside pl-2">
-                      <li>All federal holidays</li>
-                      <li>Good Friday (April 18, 2025)</li>
-                      <li>Christmas Eve (December 24)</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              <form onSubmit={handleSubmitRequest} className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div>
-                    <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      id="startDate"
-                      required
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                      value={newRequest.startDate}
-                      onChange={(e) =>
-                        setNewRequest({ ...newRequest, startDate: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
-                      End Date
-                    </label>
-                    <input
-                      type="date"
-                      id="endDate"
-                      required
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                      value={newRequest.endDate}
-                      onChange={(e) =>
-                        setNewRequest({ ...newRequest, endDate: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="type" className="block text-sm font-medium text-gray-700">
-                      Type
-                    </label>
-                    <select
-                      id="type"
-                      required
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                      value={newRequest.type}
-                      onChange={(e) =>
-                        setNewRequest({ ...newRequest, type: e.target.value as any })
-                      }
-                    >
-                      <option value="VACATION">Vacation</option>
-                      <option value="SICK">Sick Leave</option>
-                      <option value="PAID_LEAVE">Paid Leave</option>
-                      <option value="PERSONAL">Personal Time Off</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="reason" className="block text-sm font-medium text-gray-700">
-                    Reason
-                  </label>
-                  <textarea
-                    id="reason"
-                    rows={3}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                    value={newRequest.reason}
-                    onChange={(e) =>
-                      setNewRequest({ ...newRequest, reason: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <button
-                    type="submit"
-                    className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    Submit Request
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-
-          {/* Overtime Request Form */}
-          <div className="bg-white shadow rounded-lg mb-8">
-            <div className="px-4 py-5 sm:p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
-                Request Overtime Compensation
-              </h2>
-              {overtimeError && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                  {overtimeError}
-                </div>
-              )}
-              {!isLastWeek && (
-                <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
-                  Overtime requests can only be submitted during the last week of the month.
-                </div>
-              )}
-              <form onSubmit={handleSubmitOvertimeRequest} className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="hours" className="block text-sm font-medium text-gray-700">
-                      Hours Worked
-                    </label>
-                    <input
-                      type="number"
-                      id="hours"
-                      min="0.5"
-                      step="0.5"
-                      required
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                      value={newOvertimeRequest.hours}
-                      onChange={(e) =>
-                        setNewOvertimeRequest({
-                          ...newOvertimeRequest,
-                          hours: parseFloat(e.target.value),
-                        })
-                      }
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      8 hours of overtime equals 1 vacation day
-                    </p>
-                  </div>
-                  <div>
-                    <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
-                      Notes
-                    </label>
-                    <textarea
-                      id="notes"
-                      rows={3}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                      value={newOvertimeRequest.notes}
-                      onChange={(e) =>
-                        setNewOvertimeRequest({
-                          ...newOvertimeRequest,
-                          notes: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-                <div>
-                  <button
-                    type="submit"
-                    disabled={!isLastWeek}
-                    className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white ${
-                      isLastWeek ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'
-                    } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
-                  >
-                    Submit Overtime Request
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-
-          {/* Overtime Requests List */}
-          {overtimeRequests.length > 0 && (
+            {/* New Request Form */}
             <div className="bg-white shadow rounded-lg mb-8">
               <div className="px-4 py-5 sm:p-6">
                 <h2 className="text-lg font-medium text-gray-900 mb-4">
-                  Your Overtime Requests
+                  Request Time Off
+                </h2>
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-blue-700">
+                        <strong>Note:</strong> Weekends and holidays are automatically excluded from time off calculations, including:
+                      </p>
+                      <ul className="text-sm text-blue-700 mt-1 list-disc list-inside pl-2">
+                        <li>All federal holidays</li>
+                        <li>Good Friday (April 18, 2025)</li>
+                        <li>Christmas Eve (December 24)</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                <form onSubmit={handleSubmitRequest} className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div>
+                      <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        id="startDate"
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                        value={newRequest.startDate}
+                        onChange={(e) =>
+                          setNewRequest({ ...newRequest, startDate: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        id="endDate"
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                        value={newRequest.endDate}
+                        onChange={(e) =>
+                          setNewRequest({ ...newRequest, endDate: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="type" className="block text-sm font-medium text-gray-700">
+                        Type
+                      </label>
+                      <select
+                        id="type"
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                        value={newRequest.type}
+                        onChange={(e) =>
+                          setNewRequest({ ...newRequest, type: e.target.value as any })
+                        }
+                      >
+                        <option value="VACATION">Vacation</option>
+                        <option value="SICK">Sick Leave</option>
+                        <option value="PAID_LEAVE">Paid Leave</option>
+                        <option value="PERSONAL">Personal Time Off</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="reason" className="block text-sm font-medium text-gray-700">
+                      Reason
+                    </label>
+                    <textarea
+                      id="reason"
+                      rows={3}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                      value={newRequest.reason}
+                      onChange={(e) =>
+                        setNewRequest({ ...newRequest, reason: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <button
+                      type="submit"
+                      className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      Submit Request
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            {/* Overtime Request Form */}
+            <div className="bg-white shadow rounded-lg mb-8">
+              <div className="px-4 py-5 sm:p-6">
+                <h2 className="text-lg font-medium text-gray-900 mb-4">
+                  Request Overtime Compensation
+                </h2>
+                {overtimeError && (
+                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                    {overtimeError}
+                  </div>
+                )}
+                {!isLastWeek && (
+                  <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+                    Overtime requests can only be submitted during the last week of the month.
+                  </div>
+                )}
+                <form onSubmit={handleSubmitOvertimeRequest} className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="hours" className="block text-sm font-medium text-gray-700">
+                        Hours Worked
+                      </label>
+                      <input
+                        type="number"
+                        id="hours"
+                        min="0.5"
+                        step="0.5"
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                        value={newOvertimeRequest.hours}
+                        onChange={(e) =>
+                          setNewOvertimeRequest({
+                            ...newOvertimeRequest,
+                            hours: parseFloat(e.target.value),
+                          })
+                        }
+                      />
+                      <p className="mt-1 text-sm text-gray-500">
+                        8 hours of overtime equals 1 vacation day
+                      </p>
+                    </div>
+                    <div>
+                      <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
+                        Notes
+                      </label>
+                      <textarea
+                        id="notes"
+                        rows={3}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                        value={newOvertimeRequest.notes}
+                        onChange={(e) =>
+                          setNewOvertimeRequest({
+                            ...newOvertimeRequest,
+                            notes: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      type="submit"
+                      disabled={!isLastWeek}
+                      className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white ${
+                        isLastWeek ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'
+                      } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                    >
+                      Submit Overtime Request
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            {/* Overtime Requests List */}
+            {overtimeRequests.length > 0 && (
+              <div className="bg-white shadow rounded-lg mb-8">
+                <div className="px-4 py-5 sm:p-6">
+                  <h2 className="text-lg font-medium text-gray-900 mb-4">
+                    Your Overtime Requests
+                  </h2>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                            Hours
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                            Equivalent Days
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                            Notes
+                          </th>
+                          {session?.user?.role === 'ADMIN' && (
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {overtimeRequests.map((request) => {
+                          const dateInfo = formatDateWithValidation(request.request_date);
+                          
+                          return (
+                            <tr key={request.id}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {dateInfo.isValid ? (
+                                  dateInfo.display
+                                ) : (
+                                  <div className="text-red-600">
+                                    {dateInfo.display}
+                                    {dateInfo.error && (
+                                      <div className="text-xs text-red-500">{dateInfo.error}</div>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {request.hours}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {(request.hours / 8).toFixed(2)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span
+                                  className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                    request.status === 'APPROVED'
+                                      ? 'bg-green-100 text-green-800'
+                                      : request.status === 'REJECTED'
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}
+                                >
+                                  {request.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                {request.notes || '-'}
+                              </td>
+                              {session?.user?.role === 'ADMIN' && (
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  {request.status === 'PENDING' && (
+                                    <>
+                                      <button
+                                        onClick={() =>
+                                          handleUpdateOvertimeStatus(request.id, 'APPROVED')
+                                        }
+                                        className="text-green-600 hover:text-green-900 mr-4 font-medium"
+                                      >
+                                        Approve
+                                      </button>
+                                      <button
+                                        onClick={() =>
+                                          handleUpdateOvertimeStatus(request.id, 'REJECTED')
+                                        }
+                                        className="text-red-600 hover:text-red-900 font-medium"
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  )}
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Requests List */}
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-4 py-5 sm:p-6">
+                <h2 className="text-lg font-medium text-gray-900 mb-4">
+                  Your Requests
                 </h2>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                          Date
+                          Dates
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                          Hours
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                          Equivalent Days
+                          Type
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                           Status
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                          Notes
+                          Reason
                         </th>
                         {session?.user?.role === 'ADMIN' && (
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
@@ -589,155 +737,82 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {overtimeRequests.map((request) => (
-                        <tr key={request.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {formatDate(request.request_date)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {request.hours}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {(request.hours / 8).toFixed(2)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                request.status === 'APPROVED'
-                                  ? 'bg-green-100 text-green-800'
-                                  : request.status === 'REJECTED'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-yellow-100 text-yellow-800'
-                              }`}
-                            >
-                              {request.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {request.notes || '-'}
-                          </td>
-                          {session?.user?.role === 'ADMIN' && (
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              {request.status === 'PENDING' && (
-                                <>
-                                  <button
-                                    onClick={() =>
-                                      handleUpdateOvertimeStatus(request.id, 'APPROVED')
-                                    }
-                                    className="text-green-600 hover:text-green-900 mr-4 font-medium"
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      handleUpdateOvertimeStatus(request.id, 'REJECTED')
-                                    }
-                                    className="text-red-600 hover:text-red-900 font-medium"
-                                  >
-                                    Reject
-                                  </button>
-                                </>
+                      {requests.map((request) => {
+                        const startDateInfo = formatDateWithValidation(request.start_date);
+                        const endDateInfo = formatDateWithValidation(request.end_date);
+                        
+                        return (
+                          <tr key={request.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {startDateInfo.isValid && endDateInfo.isValid ? (
+                                `${startDateInfo.display} - ${endDateInfo.display}`
+                              ) : (
+                                <div className="text-red-600">
+                                  <div>Start: {startDateInfo.display}</div>
+                                  <div>End: {endDateInfo.display}</div>
+                                  {!startDateInfo.isValid && startDateInfo.error && (
+                                    <div className="text-xs text-red-500">{startDateInfo.error}</div>
+                                  )}
+                                  {!endDateInfo.isValid && endDateInfo.error && (
+                                    <div className="text-xs text-red-500">{endDateInfo.error}</div>
+                                  )}
+                                </div>
                               )}
                             </td>
-                          )}
-                        </tr>
-                      ))}
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {request.type.replace('_', ' ')}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span
+                                className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  request.status === 'APPROVED'
+                                    ? 'bg-green-100 text-green-800'
+                                    : request.status === 'REJECTED'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }`}
+                              >
+                                {request.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                              {request.reason || '-'}
+                            </td>
+                            {session?.user?.role === 'ADMIN' && (
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                {request.status === 'PENDING' && (
+                                  <>
+                                    <button
+                                      onClick={() =>
+                                        handleUpdateRequestStatus(request.id, 'APPROVED')
+                                      }
+                                      className="text-green-600 hover:text-green-900 mr-4 font-medium"
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        handleUpdateRequestStatus(request.id, 'REJECTED')
+                                      }
+                                      className="text-red-600 hover:text-red-900 font-medium"
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               </div>
             </div>
-          )}
-
-          {/* Requests List */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
-                Your Requests
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                        Dates
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                        Type
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                        Reason
-                      </th>
-                      {session?.user?.role === 'ADMIN' && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {requests.map((request) => (
-                      <tr key={request.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {formatDate(request.start_date)} 
-                          {' - '} 
-                          {formatDate(request.end_date)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {request.type.replace('_', ' ')}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              request.status === 'APPROVED'
-                                ? 'bg-green-100 text-green-800'
-                                : request.status === 'REJECTED'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}
-                          >
-                            {request.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                          {request.reason || '-'}
-                        </td>
-                        {session?.user?.role === 'ADMIN' && (
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            {request.status === 'PENDING' && (
-                              <>
-                                <button
-                                  onClick={() =>
-                                    handleUpdateRequestStatus(request.id, 'APPROVED')
-                                  }
-                                  className="text-green-600 hover:text-green-900 mr-4 font-medium"
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    handleUpdateRequestStatus(request.id, 'REJECTED')
-                                  }
-                                  className="text-red-600 hover:text-red-900 font-medium"
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </div>
         </div>
       </div>
-    </div>
+    </DashboardErrorBoundary>
   );
 } 

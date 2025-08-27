@@ -16,13 +16,14 @@ async function main() {
     return;
   }
 
-  // Create admin user
+  // Create admin user with environment variables
   const adminPassword = process.env.ADMIN_INITIAL_PASSWORD || 'Admin@123';
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@toff.com';
   const hashedPassword = await bcrypt.hash(adminPassword, 12);
 
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@toff.com',
+      email: adminEmail,
       name: 'System Administrator',
       role: 'ADMIN',
       password: hashedPassword
