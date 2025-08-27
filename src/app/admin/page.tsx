@@ -530,44 +530,33 @@ export default function AdminPage() {
                   return (
                     <tr key={user.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <a href={`/admin/employee/${user.id}`} className="text-indigo-600 hover:text-indigo-900">
+                        <button
+                          onClick={() => router.push(`/admin/employee/${user.id}`)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                          title="View employee details"
+                        >
                           {user.name}
-                        </a>
+                        </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {user.email}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
-                          <span className="font-medium">{balance?.vacationDays || 0}</span>
-                          <span className="text-gray-500 text-xs ml-1">/ {totalVacation}</span>
-                          {used.vacationDays > 0 && (
-                            <span className="text-gray-500 text-xs ml-1">
-                              ({used.vacationDays} used)
-                            </span>
-                          )}
+                          <span className="font-medium">{used.vacationDays}</span>
+                          <span className="text-gray-500 text-xs ml-1"> of {totalVacation}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
-                          <span className="font-medium">{balance?.sickDays || 0}</span>
-                          <span className="text-gray-500 text-xs ml-1">/ {totalSick}</span>
-                          {used.sickDays > 0 && (
-                            <span className="text-gray-500 text-xs ml-1">
-                              ({used.sickDays} used)
-                            </span>
-                          )}
+                          <span className="font-medium">{used.sickDays}</span>
+                          <span className="text-gray-500 text-xs ml-1"> of {totalSick}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
-                          <span className="font-medium">{balance?.paidLeave || 0}</span>
-                          <span className="text-gray-500 text-xs ml-1">/ {totalPaidLeave}</span>
-                          {used.paidLeave > 0 && (
-                            <span className="text-gray-500 text-xs ml-1">
-                              ({used.paidLeave} used)
-                            </span>
-                          )}
+                          <span className="font-medium">{used.paidLeave}</span>
+                          <span className="text-gray-500 text-xs ml-1"> of {totalPaidLeave}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
