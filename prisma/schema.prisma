@@ -137,7 +137,7 @@ model OvertimeRequest {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
-  @@unique([userId, requestDate], name: "unique_overtime_per_day")
+  // Allow multiple requests per day; admins approve the relevant one
 }
 
 enum UserRole {

@@ -312,11 +312,7 @@ export default function DashboardPage() {
         alert('Overtime request submitted. Awaiting approval.');
       } else {
         const data = await response.json();
-        if (response.status === 409) {
-          alert(data.error || 'Duplicate overtime request for the same day.');
-        } else {
-          setOvertimeError(data.error || 'Failed to submit overtime request');
-        }
+        setOvertimeError(data.error || 'Failed to submit overtime request');
       }
     } catch (err) {
       setOvertimeError('An error occurred while submitting the request');
