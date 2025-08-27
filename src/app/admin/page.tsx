@@ -294,12 +294,14 @@ export default function AdminPage() {
             >
               Back to Dashboard
             </button>
-            <button
-              onClick={() => router.push('/admin/reset')}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-            >
-              Reset Time Off Data
-            </button>
+            {process.env.NEXT_PUBLIC_ALLOW_DB_RESET === 'true' && (
+              <button
+                onClick={() => router.push('/admin/reset')}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Reset Time Off Data
+              </button>
+            )}
           </div>
         </div>
 
