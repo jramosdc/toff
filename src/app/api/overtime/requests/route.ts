@@ -78,56 +78,6 @@ export async function GET() {
           return NextResponse.json(rows);
         }
       } catch (prismaError: any) {
-        // If table doesn't exist yet in Postgres, create it and retry once
-        const message = String(prismaError?.message || prismaError);
-        if (message.includes('relation') && message.includes('does not exist')) {
-          console.warn('overtime_requests table not found; attempting to create and retry');
-          try {
-            if (!prisma) throw new Error('Prisma client unavailable for create-table');
-            // Execute statements separately; Postgres prepared statements cannot contain multiple commands
-            await prisma.$executeRawUnsafe(
-              `CREATE TABLE IF NOT EXISTS overtime_requests (
-                id uuid PRIMARY KEY,
-                "userId" uuid NOT NULL,
-                hours double precision NOT NULL,
-                "requestDate" date NOT NULL,
-                month integer NOT NULL,
-                year integer NOT NULL,
-                status text NOT NULL DEFAULT 'PENDING',
-                notes text,
-                "createdAt" timestamptz NOT NULL DEFAULT now(),
-                "updatedAt" timestamptz NOT NULL DEFAULT now()
-              )`
-            );
-            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_userId_idx ON overtime_requests("userId")`);
-            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_status_idx ON overtime_requests(status)`);
-            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_createdAt_idx ON overtime_requests("createdAt")`);
-
-            // Retry the original query once
-            if (session.user.role === 'ADMIN') {
-              const rows = await prisma.$queryRaw<any[]>`
-                SELECT o.*, u.name as user_name
-                FROM overtime_requests o
-                JOIN "User" u ON o."userId"::text = u.id
-                WHERE o.status = 'PENDING'
-                ORDER BY o."createdAt" DESC
-              `;
-              return NextResponse.json(rows);
-            } else {
-              console.log('Overtime GET: user branch after create-table (Prisma)');
-              const rows = await prisma.$queryRaw<any[]>`
-                SELECT *
-                FROM overtime_requests
-                WHERE "userId" = ${session.user.id}::uuid
-                ORDER BY "createdAt" DESC
-              `;
-              return NextResponse.json(rows);
-            }
-          } catch (createErr) {
-            console.error('Failed to create overtime_requests table during GET:', createErr);
-            return NextResponse.json([], { status: 200 });
-          }
-        }
         console.error('Prisma error fetching overtime requests:', prismaError);
         return NextResponse.json({ error: 'Failed to fetch overtime requests' }, { status: 500 });
       }
@@ -218,7 +168,7 @@ export async function POST(request: Request) {
           }, { status: 404 });
         }
         
-        // Create the overtime request using raw SQL (table managed outside Prisma schema)
+        // Create the overtime request with raw SQL (managed by Prisma model/migration in DB)
         stage = 'insert-overtime';
         await prisma.$executeRawUnsafe(
           `INSERT INTO overtime_requests (id, "userId", hours, "requestDate", month, year, status, notes)
@@ -236,52 +186,6 @@ export async function POST(request: Request) {
       } catch (prismaError: any) {
         console.error(`Prisma error at stage ${stage}:`, prismaError);
         const message = prismaError?.message || String(prismaError);
-        // Auto-create table if missing, then retry once
-        if (stage === 'insert-overtime' && message.includes('relation') && message.includes('does not exist')) {
-          console.warn('overtime_requests table missing; attempting to create it and retry insert');
-          try {
-            if (!prisma) {
-              throw new Error('Prisma client unavailable for create-table');
-            }
-            await prisma.$executeRawUnsafe(
-              `CREATE TABLE IF NOT EXISTS overtime_requests (
-                id uuid PRIMARY KEY,
-                "userId" uuid NOT NULL,
-                hours double precision NOT NULL,
-                "requestDate" date NOT NULL,
-                month integer NOT NULL,
-                year integer NOT NULL,
-                status text NOT NULL DEFAULT 'PENDING',
-                notes text,
-                "createdAt" timestamptz NOT NULL DEFAULT now(),
-                "updatedAt" timestamptz NOT NULL DEFAULT now()
-              )`
-            );
-            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_userId_idx ON overtime_requests("userId")`);
-            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_status_idx ON overtime_requests(status)`);
-            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS overtime_requests_createdAt_idx ON overtime_requests("createdAt")`);
-
-            // Retry insert once
-            await prisma.$executeRawUnsafe(
-              `INSERT INTO overtime_requests (id, "userId", hours, "requestDate", month, year, status, notes)
-               VALUES ($1::uuid, $2::uuid, $3, $4::date, $5, $6, $7, $8)`,
-              requestId,
-              userIdToUse,
-              hours,
-              requestDate,
-              month,
-              year,
-              'PENDING',
-              notes || null
-            );
-            console.log('Created overtime_requests table and retried insert successfully');
-          } catch (createTableError: any) {
-            console.error('Failed to create overtime_requests table or retry insert:', createTableError);
-            const msg = createTableError?.message || String(createTableError);
-            throw new Error(`Stage ${stage} failed after create-table attempt: ${msg}`);
-          }
-          return; // success path after retry
-        }
         throw new Error(`Stage ${stage} failed: ${message}`);
       }
     } else if (db) {
