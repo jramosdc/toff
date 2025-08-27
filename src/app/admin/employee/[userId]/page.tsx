@@ -82,6 +82,7 @@ export default function EmployeePage({ params }: PageProps) {
   const [usedDays, setUsedDays] = useState<UsedDays | null>(null);
   const [requests, setRequests] = useState<TimeOffRequest[]>([]);
   const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]);
+  const [auditLogs, setAuditLogs] = useState<Array<{ id: string; action: string; entityType: string; entityId: string; details: any; createdAt: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -142,6 +143,13 @@ export default function EmployeePage({ params }: PageProps) {
         const overtimeData = await overtimeRes.json();
         const mine = Array.isArray(overtimeData) ? overtimeData.filter((r: any) => r.user_id === userId || r.userId === userId) : [];
         setOvertimeRequests(mine);
+      }
+
+      // Fetch recent audit logs
+      const auditRes = await fetch(`/api/admin/audit?userId=${userId}&limit=10`);
+      if (auditRes.ok) {
+        const logs = await auditRes.json();
+        setAuditLogs(logs);
       }
     } catch (err) {
       setError('An error occurred while fetching data');
@@ -591,6 +599,27 @@ export default function EmployeePage({ params }: PageProps) {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg mt-8">
+          <div className="px-4 py-5 sm:p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h2>
+            {auditLogs.length === 0 ? (
+              <div className="text-sm text-gray-700">No recent activity.</div>
+            ) : (
+              <ul className="space-y-2">
+                {auditLogs.map(log => (
+                  <li key={log.id} className="text-sm text-gray-800">
+                    <span className="font-medium">{new Date(log.createdAt).toLocaleString()}</span> — {log.action} {log.entityType}
+                    {log.details && (
+                      <span className="text-gray-600">: {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </div>
