@@ -135,6 +135,7 @@ export default function DashboardPage() {
     notes: '',
   });
   const [overtimeError, setOvertimeError] = useState('');
+  const [overtimeToast, setOvertimeToast] = useState<string | null>(null);
   const [isLastWeek, setIsLastWeek] = useState(false);
   const [isSubmittingOvertime, setIsSubmittingOvertime] = useState(false);
 
@@ -309,7 +310,8 @@ export default function DashboardPage() {
           notes: '',
         });
         fetchOvertimeRequests();
-        alert('Overtime request submitted. Awaiting approval.');
+        setOvertimeToast('Overtime request submitted. Awaiting approval.');
+        setTimeout(() => setOvertimeToast(null), 2500);
       } else {
         const data = await response.json();
         setOvertimeError(data.error || 'Failed to submit overtime request');

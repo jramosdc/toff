@@ -54,6 +54,7 @@ export default function AllRequestsPage() {
   const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
@@ -134,6 +135,8 @@ export default function AllRequestsPage() {
 
       // Clear any previous errors on success
       setError('');
+      setToast({ type: 'success', message: `Request ${newStatus.toLowerCase()} successfully` });
+      setTimeout(() => setToast(null), 2500);
       
       // Show success message briefly
       const successMessage = `Request ${newStatus.toLowerCase()} successfully!`;
@@ -182,6 +185,8 @@ export default function AllRequestsPage() {
         throw new Error(errData.error || 'Failed to update overtime status');
       }
       setError('');
+      setToast({ type: 'success', message: `Overtime ${newStatus.toLowerCase()} successfully` });
+      setTimeout(() => setToast(null), 2500);
       await fetchRequests(); // refresh balances-related view if needed
       await fetchOvertime();
     } catch (err) {
