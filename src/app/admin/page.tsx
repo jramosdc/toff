@@ -78,6 +78,7 @@ export default function AdminPage() {
   const [whoDate, setWhoDate] = useState<string>('');
   const [whoOff, setWhoOff] = useState<Array<{ userId: string; name: string; email: string; type: string; startDate: string; endDate: string }>>([]);
   const [whoLoading, setWhoLoading] = useState(false);
+  const [overtimeDaysYtd, setOvertimeDaysYtd] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -147,6 +148,22 @@ export default function AdminPage() {
         
         setBalances(balancesMap);
         setUsedDays(usedDaysMap);
+
+        // Fetch overtime rollups YTD for all users
+        try {
+          const year = new Date().getFullYear();
+          const rollRes = await fetch(`/api/admin/overtime/rollup?year=${year}`);
+          if (rollRes.ok) {
+            const rows = await rollRes.json();
+            const map: Record<string, number> = {};
+            if (Array.isArray(rows)) {
+              for (const r of rows) {
+                map[r.userId] = Number(r.days || 0);
+              }
+            }
+            setOvertimeDaysYtd(map);
+          }
+        } catch {}
       } else {
         setError('Failed to fetch users');
       }
@@ -581,6 +598,7 @@ export default function AdminPage() {
                   const totalVacation = (balance?.vacationDays || 0) + used.vacationDays;
                   const totalSick = (balance?.sickDays || 0) + used.sickDays;
                   const totalPaidLeave = (balance?.paidLeave || 0) + used.paidLeave;
+                  const otDays = overtimeDaysYtd[user.id] || 0;
                   
                   return (
                     <tr key={user.id}>
@@ -600,6 +618,9 @@ export default function AdminPage() {
                         <div>
                           <span className="font-medium">{used.vacationDays}</span>
                           <span className="text-gray-500 text-xs ml-1"> of {totalVacation}</span>
+                          {otDays > 0 && (
+                            <span className="text-xs text-green-600 ml-2">(+{otDays.toFixed(2)} from overtime)</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
