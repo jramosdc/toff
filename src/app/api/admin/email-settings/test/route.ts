@@ -13,7 +13,10 @@ export async function POST() {
     let userEmail = process.env.EMAIL_SERVER_USER;
     let userPass = process.env.EMAIL_SERVER_PASSWORD;
     if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
-      const row = await prisma!.emailSettings.findFirst();
+      try {
+        await prisma!.$executeRawUnsafe(`SELECT 1 FROM "EmailSettings" LIMIT 1`);
+      } catch {}
+      const row = await (prisma as any).emailSettings?.findFirst?.();
       if (row?.userEmail) userEmail = row.userEmail;
       if (row?.userPass) userPass = row.userPass;
     }
