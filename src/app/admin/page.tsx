@@ -73,7 +73,12 @@ export default function AdminPage() {
     role: 'EMPLOYEE',
   });
   const [showAddUser, setShowAddUser] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [highlightedRequestId, setHighlightedRequestId] = useState<string | null>(null);
+  const [whoDate, setWhoDate] = useState<string>('');
+  const [whoOff, setWhoOff] = useState<Array<{ userId: string; name: string; email: string; type: string; startDate: string; endDate: string }>>([]);
+  const [whoLoading, setWhoLoading] = useState(false);
+  const [overtimeDaysYtd, setOvertimeDaysYtd] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -143,6 +148,22 @@ export default function AdminPage() {
         
         setBalances(balancesMap);
         setUsedDays(usedDaysMap);
+
+        // Fetch overtime rollups YTD for all users
+        try {
+          const year = new Date().getFullYear();
+          const rollRes = await fetch(`/api/admin/overtime/rollup?year=${year}`);
+          if (rollRes.ok) {
+            const rows = await rollRes.json();
+            const map: Record<string, number> = {};
+            if (Array.isArray(rows)) {
+              for (const r of rows) {
+                map[r.userId] = Number(r.days || 0);
+              }
+            }
+            setOvertimeDaysYtd(map);
+          }
+        } catch {}
       } else {
         setError('Failed to fetch users');
       }
@@ -151,6 +172,39 @@ export default function AdminPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWhoIsOff = async () => {
+    setWhoLoading(true);
+    try {
+      const dateParam = whoDate || new Date().toISOString().split('T')[0];
+      const res = await fetch(`/api/admin/who-is-off?date=${dateParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        setWhoOff(data);
+      } else {
+        setWhoOff([]);
+      }
+    } finally {
+      setWhoLoading(false);
+    }
+  };
+
+  const deleteUser = async (user: User) => {
+    if (!confirm(`Delete ${user.name}? This will remove their balances and requests.`)) return;
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Failed to delete user');
+        return;
+      }
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+    } catch (e) {
+      setError('An error occurred while deleting user');
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -262,26 +316,42 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gray-100 py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <div className="flex space-x-4">
+          <h1 className="text-3xl font-bold text-slate-900">Admin Dashboard</h1>
+          <div className="flex space-x-3">
+            <button
+              onClick={() => router.push('/admin/settings/email')}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors"
+              title="Email Settings"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2.94 6.34a2 2 0 0 1 2-1.84h10.12a2 2 0 0 1 2 1.84L10 10.88 2.94 6.34Z"/><path d="M2.75 7.9V14a2 2 0 0 0 2 2h10.5a2 2 0 0 0 2-2V7.9l-7.14 4.41a1.5 1.5 0 0 1-1.52 0L2.75 7.9Z"/></svg>
+              Email Settings
+            </button>
             <button
               onClick={() => router.push('/admin/requests')}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 mr-4"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+              title="View requests"
             >
-              View All Time Off Requests
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h12a2 2 0 0 1 2 2v1H4V6a2 2 0 0 1 2-2Zm-2 5h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9Zm4 2v2h8v-2H8Zm0 4v2h5v-2H8Z"/></svg>
+              View Requests
             </button>
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              title="Back to dashboard"
             >
-              Back to Dashboard
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M10 19a1 1 0 0 1-1 1H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h3a1 1 0 1 1 0 2H6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1Zm10.71-7.29-4-4a1 1 0 0 0-1.42 1.42L17.59 11H9a1 1 0 0 0 0 2h8.59l-2.3 2.29a1 1 0 1 0 1.42 1.42l4-4a1 1 0 0 0 0-1.42Z"/></svg>
+              Back
             </button>
-            <button
-              onClick={() => router.push('/admin/reset')}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-            >
-              Reset Time Off Data
-            </button>
+            {process.env.NEXT_PUBLIC_ALLOW_DB_RESET === 'true' && (
+              <button
+                onClick={() => router.push('/admin/reset')}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700 transition-colors"
+                title="Reset data"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V2L7 7l5 5V9a5 5 0 1 1-5 5h-2a7 7 0 1 0 7-7Z"/></svg>
+                Reset
+              </button>
+            )}
           </div>
         </div>
 
@@ -379,6 +449,40 @@ export default function AdminPage() {
               </form>
             </div>
           )}
+        </div>
+
+        {/* Who is off */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+          <div className="px-4 py-5 sm:px-6">
+            <h2 className="text-lg font-medium text-gray-900">Who is off</h2>
+            <p className="mt-1 text-sm text-gray-500">Check who is taking time off on a specific day.</p>
+            <div className="mt-4 flex items-center space-x-2">
+              <input
+                type="date"
+                value={whoDate}
+                onChange={(e) => setWhoDate(e.target.value)}
+                className="border border-gray-300 rounded-md p-2"
+              />
+              <button
+                onClick={fetchWhoIsOff}
+                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                disabled={whoLoading}
+              >
+                {whoLoading ? 'Checking…' : 'Check'}
+              </button>
+            </div>
+            <div className="mt-4">
+              {whoOff.length === 0 ? (
+                <div className="text-sm text-gray-700">No one is taking time off</div>
+              ) : (
+                <ul className="list-disc list-inside text-sm text-gray-800">
+                  {whoOff.map(item => (
+                    <li key={`${item.userId}-${item.startDate}`}>{item.name} — {item.type.replace('_',' ')} ({new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()})</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Pending Overtime Requests Section */}
@@ -508,48 +612,41 @@ export default function AdminPage() {
                   const totalVacation = (balance?.vacationDays || 0) + used.vacationDays;
                   const totalSick = (balance?.sickDays || 0) + used.sickDays;
                   const totalPaidLeave = (balance?.paidLeave || 0) + used.paidLeave;
+                  const otDays = overtimeDaysYtd[user.id] || 0;
                   
                   return (
                     <tr key={user.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <a href={`/admin/employee/${user.id}`} className="text-indigo-600 hover:text-indigo-900">
+                        <button
+                          onClick={() => router.push(`/admin/employee/${user.id}`)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                          title="View employee details"
+                        >
                           {user.name}
-                        </a>
+                        </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {user.email}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
-                          <span className="font-medium">{balance?.vacationDays || 0}</span>
-                          <span className="text-gray-500 text-xs ml-1">/ {totalVacation}</span>
-                          {used.vacationDays > 0 && (
-                            <span className="text-gray-500 text-xs ml-1">
-                              ({used.vacationDays} used)
-                            </span>
+                          <span className="font-medium">{used.vacationDays}</span>
+                          <span className="text-gray-500 text-xs ml-1"> of {totalVacation}</span>
+                          {otDays > 0 && (
+                            <span className="text-xs text-green-600 ml-2">(+{otDays.toFixed(2)} from overtime)</span>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
-                          <span className="font-medium">{balance?.sickDays || 0}</span>
-                          <span className="text-gray-500 text-xs ml-1">/ {totalSick}</span>
-                          {used.sickDays > 0 && (
-                            <span className="text-gray-500 text-xs ml-1">
-                              ({used.sickDays} used)
-                            </span>
-                          )}
+                          <span className="font-medium">{used.sickDays}</span>
+                          <span className="text-gray-500 text-xs ml-1"> of {totalSick}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
-                          <span className="font-medium">{balance?.paidLeave || 0}</span>
-                          <span className="text-gray-500 text-xs ml-1">/ {totalPaidLeave}</span>
-                          {used.paidLeave > 0 && (
-                            <span className="text-gray-500 text-xs ml-1">
-                              ({used.paidLeave} used)
-                            </span>
-                          )}
+                          <span className="font-medium">{used.paidLeave}</span>
+                          <span className="text-gray-500 text-xs ml-1"> of {totalPaidLeave}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -558,6 +655,16 @@ export default function AdminPage() {
                           className="text-indigo-600 hover:text-indigo-900 mr-4"
                         >
                           View Details
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDeletingUserId(user.id);
+                            deleteUser(user);
+                          }}
+                          disabled={deletingUserId === user.id}
+                          className={deletingUserId === user.id ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:text-red-900'}
+                        >
+                          {deletingUserId === user.id ? 'Deleting…' : 'Delete'}
                         </button>
                       </td>
                     </tr>

@@ -39,6 +39,14 @@ interface UsedDays {
   personalDays: number;
 }
 
+interface OvertimeRequest {
+  id: string;
+  hours: number;
+  request_date: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  notes?: string;
+}
+
 // Helper function to safely format dates
 const formatDate = (dateString: string) => {
   try {
@@ -73,6 +81,8 @@ export default function EmployeePage({ params }: PageProps) {
   const [balance, setBalance] = useState<TimeOffBalance | null>(null);
   const [usedDays, setUsedDays] = useState<UsedDays | null>(null);
   const [requests, setRequests] = useState<TimeOffRequest[]>([]);
+  const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]);
+  const [auditLogs, setAuditLogs] = useState<Array<{ id: string; action: string; entityType: string; entityId: string; details: any; createdAt: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -125,6 +135,21 @@ export default function EmployeePage({ params }: PageProps) {
       if (requestsResponse.ok) {
         const requestsData = await requestsResponse.json();
         setRequests(requestsData);
+      }
+
+      // Fetch overtime requests (user perspective)
+      const overtimeRes = await fetch('/api/overtime/requests');
+      if (overtimeRes.ok) {
+        const overtimeData = await overtimeRes.json();
+        const mine = Array.isArray(overtimeData) ? overtimeData.filter((r: any) => r.user_id === userId || r.userId === userId) : [];
+        setOvertimeRequests(mine);
+      }
+
+      // Fetch recent audit logs
+      const auditRes = await fetch(`/api/admin/audit?userId=${userId}&limit=10`);
+      if (auditRes.ok) {
+        const logs = await auditRes.json();
+        setAuditLogs(logs);
       }
     } catch (err) {
       setError('An error occurred while fetching data');
@@ -531,6 +556,70 @@ export default function EmployeePage({ params }: PageProps) {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+
+        {/* Overtime Requests */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg mt-8">
+          <div className="px-4 py-5 sm:p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Overtime Requests</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Hours</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Equivalent Days</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Notes</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {overtimeRequests.length > 0 ? (
+                    overtimeRequests.map((r) => (
+                      <tr key={r.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{formatDate(r.request_date)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{r.hours}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{(r.hours / 8).toFixed(2)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            r.status === 'APPROVED' ? 'bg-green-100 text-green-800' : r.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {r.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{r.notes || '-'}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-700 font-medium">No overtime requests found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg mt-8">
+          <div className="px-4 py-5 sm:p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h2>
+            {auditLogs.length === 0 ? (
+              <div className="text-sm text-gray-700">No recent activity.</div>
+            ) : (
+              <ul className="space-y-2">
+                {auditLogs.map(log => (
+                  <li key={log.id} className="text-sm text-gray-800">
+                    <span className="font-medium">{new Date(log.createdAt).toLocaleString()}</span> — {log.action} {log.entityType}
+                    {log.details && (
+                      <span className="text-gray-600">: {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </div>

@@ -22,6 +22,14 @@ export async function POST(req: NextRequest) {
       );
     }
     
+    // Env gate: disallow in production unless explicitly allowed
+    if (process.env.VERCEL && process.env.ALLOW_DB_RESET !== 'true') {
+      return NextResponse.json(
+        { error: 'Reset disabled in this environment' },
+        { status: 403 }
+      );
+    }
+
     // Check if Prisma is available
     if (!isPrismaEnabled || !prisma) {
       return NextResponse.json(
@@ -32,11 +40,11 @@ export async function POST(req: NextRequest) {
     
     // Parse request body
     const body = await req.json();
-    const { confirmReset } = body;
+    const { confirmReset, phrase } = body;
     
-    if (confirmReset !== true) {
+    if (confirmReset !== true || phrase !== 'DELETE toff') {
       return NextResponse.json(
-        { error: 'Reset not confirmed. Please set confirmReset to true' },
+        { error: 'Reset not confirmed. Provide confirmReset=true and phrase="DELETE toff"' },
         { status: 400 }
       );
     }

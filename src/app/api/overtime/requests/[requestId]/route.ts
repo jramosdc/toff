@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import db, { prisma, isPrismaEnabled, dbOperations } from '@/lib/db';
+import { AuditLogger } from '@/lib/audit';
 import { sendRequestStatusNotification } from '@/lib/email';
 
 interface OvertimeRequest {
@@ -98,6 +99,29 @@ export async function PATCH(
             }
           });
         }
+      }
+
+      // Audit log
+      try {
+        const logger = new AuditLogger(prisma);
+        await logger.log(
+          session.user.id,
+          'UPDATE',
+          'REQUEST',
+          requestId,
+          { action: 'OVERTIME_STATUS', newStatus: status }
+        );
+        if (status === 'APPROVED') {
+          await logger.log(
+            session.user.id,
+            'UPDATE',
+            'BALANCE',
+            `${overtimeRequest.user_id}-${overtimeRequest.year}-VACATION`,
+            { action: 'OVERTIME_APPROVED_ADD_DAYS', daysAdded: overtimeRequest.hours / 8 }
+          );
+        }
+      } catch (e) {
+        console.error('Failed to write audit log for overtime PATCH:', e);
       }
     } else {
       // SQLite path (local dev)

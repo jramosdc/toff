@@ -137,7 +137,16 @@ model OvertimeRequest {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
-  @@unique([userId, requestDate], name: "unique_overtime_per_day")
+  // Allow multiple requests per day; admins approve the relevant one
+}
+
+/// Minimal email settings stored in DB; host/port come from env
+model EmailSettings {
+  id         String   @id @default(uuid())
+  userEmail  String
+  userPass   String
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
 }
 
 enum UserRole {

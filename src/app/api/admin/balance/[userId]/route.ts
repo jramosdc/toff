@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import db, { dbOperations, prisma, isPrismaEnabled } from '@/lib/db';
+import { AuditLogger } from '@/lib/audit';
 import { randomUUID } from 'crypto';
 
 // Define TimeOffBalance type for legacy SQLite
@@ -262,6 +263,20 @@ export async function PUT(
         }
       }
       
+      // Audit log manual balance edit
+      try {
+        const logger = new AuditLogger(prisma);
+        await logger.log(
+          session.user.id,
+          'UPDATE',
+          'BALANCE',
+          `${userId}-${currentYear}`,
+          { vacationDays, sickDays, paidLeave, personalDays }
+        );
+      } catch (e) {
+        console.error('Failed to write audit log for balance update:', e);
+      }
+
       // Return the updated balance in the expected format
       const updatedBalance: AdminBalanceResponse = {
         id: `${userId}-${currentYear}`,
