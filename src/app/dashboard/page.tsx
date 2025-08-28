@@ -350,13 +350,15 @@ export default function DashboardPage() {
       <div className="min-h-screen bg-gray-100">
         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <div className="px-4 py-6 sm:px-0">
-            <h1 className="text-3xl font-bold text-gray-900 mb-8">
+            <h1 className="text-3xl font-bold text-slate-900 mb-8">
               Time Off Dashboard
               {session?.user?.role === 'ADMIN' && (
                 <button
                   onClick={() => router.push('/admin')}
-                  className="ml-4 px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  className="ml-4 inline-flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+                  title="Admin Panel"
                 >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm1 15h-2v-2h2Zm0-4h-2V7h2Z"/></svg>
                   Admin Panel
                 </button>
               )}
@@ -532,8 +534,9 @@ export default function DashboardPage() {
                   <div>
                     <button
                       type="submit"
-                      className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      className="inline-flex items-center gap-2 justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                     >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M5 12h14a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Zm0-6h14a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Zm0 12h9a1 1 0 0 1 0 2H5a1 1 0 1 1 0-2Z"/></svg>
                       Submit Request
                     </button>
                   </div>
@@ -604,10 +607,11 @@ export default function DashboardPage() {
                     <button
                       type="submit"
                       disabled={!isLastWeek || isSubmittingOvertime}
-                      className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white ${
-                        isLastWeek && !isSubmittingOvertime ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'
-                      } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                      className={`inline-flex items-center gap-2 justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white ${
+                        isLastWeek && !isSubmittingOvertime ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'
+                      } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors`}
                     >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M5 4h14a1 1 0 0 1 .8 1.6l-6.2 8.27V20l-3-2v-4.13L4.2 5.6A1 1 0 0 1 5 4Z"/></svg>
                       {isSubmittingOvertime ? 'Submitting…' : 'Submit Overtime Request'}
                     </button>
                   </div>
