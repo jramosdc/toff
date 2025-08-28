@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { prisma, isPrismaEnabled } from './db';
 
 // Configure email transporter
 // For development, we'll use a test account from Ethereal
@@ -13,13 +14,23 @@ export async function initializeEmailTransporter() {
   // If running on Vercel, don't use localhost SMTP
   if (process.env.VERCEL) {
     // For production, use proper SMTP configuration with authentication
+    // Read user/pass from DB settings if present
+    let user = process.env.EMAIL_SERVER_USER;
+    let pass = process.env.EMAIL_SERVER_PASSWORD;
+    try {
+      if (isPrismaEnabled && prisma) {
+        const row = await (prisma as any).emailSettings?.findFirst?.();
+        if (row?.userEmail) user = row.userEmail;
+        if (row?.userPass) pass = row.userPass;
+      }
+    } catch {}
     transporter = nodemailer.createTransport({
       host: process.env.EMAIL_SERVER_HOST,
       port: process.env.EMAIL_SERVER_PORT ? parseInt(process.env.EMAIL_SERVER_PORT) : 587,
       secure: false, // true for 465, false for other ports
       auth: {
-        user: process.env.EMAIL_SERVER_USER,
-        pass: process.env.EMAIL_SERVER_PASSWORD,
+        user,
+        pass,
       },
     });
     
