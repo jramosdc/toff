@@ -316,32 +316,40 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gray-100 py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <div className="flex space-x-4">
+          <h1 className="text-3xl font-bold text-slate-900">Admin Dashboard</h1>
+          <div className="flex space-x-3">
             <button
               onClick={() => router.push('/admin/settings/email')}
-              className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors"
+              title="Email Settings"
             >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2.94 6.34a2 2 0 0 1 2-1.84h10.12a2 2 0 0 1 2 1.84L10 10.88 2.94 6.34Z"/><path d="M2.75 7.9V14a2 2 0 0 0 2 2h10.5a2 2 0 0 0 2-2V7.9l-7.14 4.41a1.5 1.5 0 0 1-1.52 0L2.75 7.9Z"/></svg>
               Email Settings
             </button>
             <button
               onClick={() => router.push('/admin/requests')}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 mr-4"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+              title="View requests"
             >
-              View All Time Off Requests
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h12a2 2 0 0 1 2 2v1H4V6a2 2 0 0 1 2-2Zm-2 5h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9Zm4 2v2h8v-2H8Zm0 4v2h5v-2H8Z"/></svg>
+              View Requests
             </button>
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              title="Back to dashboard"
             >
-              Back to Dashboard
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M10 19a1 1 0 0 1-1 1H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h3a1 1 0 1 1 0 2H6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1Zm10.71-7.29-4-4a1 1 0 0 0-1.42 1.42L17.59 11H9a1 1 0 0 0 0 2h8.59l-2.3 2.29a1 1 0 1 0 1.42 1.42l4-4a1 1 0 0 0 0-1.42Z"/></svg>
+              Back
             </button>
             {process.env.NEXT_PUBLIC_ALLOW_DB_RESET === 'true' && (
               <button
                 onClick={() => router.push('/admin/reset')}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700 transition-colors"
+                title="Reset data"
               >
-                Reset Time Off Data
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V2L7 7l5 5V9a5 5 0 1 1-5 5h-2a7 7 0 1 0 7-7Z"/></svg>
+                Reset
               </button>
             )}
           </div>
