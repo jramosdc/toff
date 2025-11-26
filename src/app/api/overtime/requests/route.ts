@@ -57,9 +57,9 @@ export async function GET() {
           }
           const rows = await prisma.$queryRaw<any[]>`
             SELECT o.*, u.name as user_name
-            FROM overtime_requests o
+             FROM overtime_requests o
             JOIN "User" u ON o."userId"::text = u.id
-            WHERE o.status = 'PENDING'
+             WHERE o.status = 'PENDING'
             ORDER BY o."createdAt" DESC
           `;
           return NextResponse.json(rows);
@@ -71,7 +71,7 @@ export async function GET() {
           console.log('Overtime GET: user branch (Prisma)');
           const rows = await prisma.$queryRaw<any[]>`
             SELECT *
-            FROM overtime_requests
+             FROM overtime_requests
             WHERE "userId" = ${session.user.id}::uuid
             ORDER BY "createdAt" DESC
           `;

@@ -276,7 +276,7 @@ export async function PUT(
       } catch (e) {
         console.error('Failed to write audit log for balance update:', e);
       }
-
+      
       // Return the updated balance in the expected format
       const updatedBalance: AdminBalanceResponse = {
         id: `${userId}-${currentYear}`,

@@ -144,4 +144,96 @@ export function calculateWorkingDays(start: Date, end: Date): number {
     }
   }
   return count;
-} 
+}
+
+export function validateDateRange(
+  startDate: Date,
+  endDate: Date,
+  blackoutDates: Date[] = [],
+  maxConsecutiveDays: number = 30
+): { isValid: boolean; errors: { message: string; code?: string; field?: string }[] } {
+  const errors = [];
+
+  // Basic range check
+  if (startDate > endDate) {
+    errors.push({
+      field: 'endDate',
+      message: 'End date must be after start date',
+      code: 'INVALID_DATE_RANGE'
+    });
+  }
+
+  // Check max consecutive days
+  const days = calculateWorkingDays(startDate, endDate);
+  if (days > maxConsecutiveDays) {
+    errors.push({
+      message: `Request exceeds maximum consecutive days (${maxConsecutiveDays})`,
+      code: 'MAX_DAYS_EXCEEDED'
+    });
+  }
+
+  // Check blackout dates
+  // Convert blackout dates to strings for comparison
+  if (blackoutDates.length > 0) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const blackoutStrings = new Set(blackoutDates.map(d => {
+      const { year, month, day } = getUtcCalendarParts(new Date(d));
+      return `${year}-${month}-${day}`;
+    }));
+
+    // Iterate through range
+    const current = new Date(start);
+    while (current <= end) {
+      const { year, month, day } = getUtcCalendarParts(current);
+      const dateString = `${year}-${month}-${day}`;
+      
+      if (blackoutStrings.has(dateString)) {
+        errors.push({
+          message: 'Request includes blackout dates',
+          code: 'BLACKOUT_DATE'
+        });
+        break; 
+      }
+      
+      current.setDate(current.getDate() + 1);
+    }
+  }
+
+  return { isValid: errors.length === 0, errors };
+}
+
+export function validateNoticePeriod(
+  startDate: Date,
+  minNoticeDays: number
+): { isValid: boolean; errors: { message: string; code?: string; field?: string }[] } {
+  // Allow past dates to support backfilling records
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+
+  // If start date is in the past or today, we allow it regardless of notice period
+  if (start <= today) {
+    return { isValid: true, errors: [] };
+  }
+
+  // Calculate days diff for future dates
+  const oneDay = 24 * 60 * 60 * 1000;
+  const diffDays = Math.ceil((start.getTime() - today.getTime()) / oneDay);
+
+  if (diffDays < minNoticeDays) {
+    return {
+      isValid: false,
+      errors: [{
+        field: 'startDate',
+        message: `Time off must be requested at least ${minNoticeDays} days in advance`,
+        code: 'INSUFFICIENT_NOTICE'
+      }]
+    };
+  }
+
+  return { isValid: true, errors: [] };
+}
+ 

@@ -341,7 +341,7 @@ export default function AllRequestsPage() {
                           {request.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate" title={request.reason}>
                         {request.reason || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

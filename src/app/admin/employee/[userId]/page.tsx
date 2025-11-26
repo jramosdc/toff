@@ -541,7 +541,7 @@ export default function EmployeePage({ params }: PageProps) {
                             {request.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                        <td className="px-6 py-4 text-sm text-gray-800 max-w-xs truncate" title={request.reason}>
                           {request.reason || '-'}
                         </td>
                       </tr>

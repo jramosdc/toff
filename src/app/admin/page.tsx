@@ -343,14 +343,14 @@ export default function AdminPage() {
               Back
             </button>
             {process.env.NEXT_PUBLIC_ALLOW_DB_RESET === 'true' && (
-              <button
-                onClick={() => router.push('/admin/reset')}
+            <button
+              onClick={() => router.push('/admin/reset')}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700 transition-colors"
                 title="Reset data"
-              >
+            >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V2L7 7l5 5V9a5 5 0 1 1-5 5h-2a7 7 0 1 0 7-7Z"/></svg>
                 Reset
-              </button>
+            </button>
             )}
           </div>
         </div>
@@ -544,7 +544,7 @@ export default function AdminPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {(request.hours / 8).toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate" title={request.notes}>
                         {request.notes || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

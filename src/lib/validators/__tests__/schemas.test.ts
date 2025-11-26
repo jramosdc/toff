@@ -100,23 +100,23 @@ describe('Time Off Request Schema Validation', () => {
     }
   });
 
-  it('should reject start date in the past', () => {
+  it('should allow start date in the past', () => {
     const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 1);
+    pastDate.setDate(pastDate.getDate() - 10);
     
-    const invalidRequest = {
+    const pastEndDate = new Date();
+    pastEndDate.setDate(pastEndDate.getDate() - 5);
+
+    const validRequest = {
       userId: '123e4567-e89b-12d3-a456-426614174000',
       startDate: pastDate.toISOString(),
-      endDate: '2025-01-24T00:00:00.000Z',
+      endDate: pastEndDate.toISOString(),
       type: 'VACATION',
-      reason: 'Annual family vacation'
+      reason: 'Past family vacation'
     };
 
-    const result = CreateTimeOffRequestSchema.safeParse(invalidRequest);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toContain('Start date must be before or equal to end date');
-    }
+    const result = CreateTimeOffRequestSchema.safeParse(validRequest);
+    expect(result.success).toBe(true);
   });
 
   it('should reject empty reason', () => {

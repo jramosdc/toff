@@ -60,10 +60,10 @@ export async function PATCH(
         requestId
       );
       overtimeRequest = rows?.[0];
-
-      if (!overtimeRequest) {
-        return NextResponse.json({ error: 'Overtime request not found or not pending' }, { status: 404 });
-      }
+    
+    if (!overtimeRequest) {
+      return NextResponse.json({ error: 'Overtime request not found or not pending' }, { status: 404 });
+    }
 
       // Update status
       await prisma.$executeRawUnsafe(
@@ -138,19 +138,19 @@ export async function PATCH(
       }
       overtimeRequest = sqliteRequest;
 
-      // Update the status
+    // Update the status
       if (!dbOperations) {
         return NextResponse.json({ error: 'Database operations unavailable' }, { status: 500 });
       }
-      dbOperations.updateOvertimeRequestStatus.run(status, requestId);
+    dbOperations.updateOvertimeRequestStatus.run(status, requestId);
 
-      // If approved, add vacation days
-      if (status === 'APPROVED') {
-        dbOperations.addVacationDaysFromOvertime(
-          overtimeRequest.user_id,
-          overtimeRequest.hours,
-          overtimeRequest.year
-        );
+    // If approved, add vacation days
+    if (status === 'APPROVED') {
+      dbOperations.addVacationDaysFromOvertime(
+        overtimeRequest.user_id,
+        overtimeRequest.hours,
+        overtimeRequest.year
+      );
       }
     }
 

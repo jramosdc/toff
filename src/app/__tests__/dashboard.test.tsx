@@ -250,7 +250,7 @@ describe('DashboardPage', () => {
       vi.setSystemTime(new Date('2025-01-15T12:00:00Z'));
 
       render(<DashboardPage />);
-
+      
       expect(
         screen.getByText('Overtime requests can only be submitted during the last week of the month.')
       ).toBeInTheDocument();

@@ -36,6 +36,7 @@ const isParsableDateString = (value: string) => {
 
 export const CreateTimeOffRequestSchema = z.object({
   userId: z.string().uuid('Invalid uuid'),
+  // We allow past dates for backfilling purposes
   startDate: z.string().refine(isParsableDateString, 'Invalid date'),
   endDate: z.string().refine(isParsableDateString, 'Invalid date'),
   type: z.string().refine((v) => (AllowedTimeOffTypes as readonly string[]).includes(v), { message: 'Invalid enum value' }),

@@ -265,7 +265,7 @@ export default function DashboardPage() {
     if (isSubmittingOvertime) {
       return;
     }
-
+    
     if (!session?.user?.id) {
       setOvertimeError('User ID not found in session');
       return;

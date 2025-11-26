@@ -63,7 +63,7 @@ export async function GET(
     console.error('Error fetching user:', error);
     return NextResponse.json({ error: `Failed to fetch user: ${error}` }, { status: 500 });
   }
-}
+} 
 
 export async function DELETE(
   request: Request,

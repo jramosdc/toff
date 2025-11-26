@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { isFederalHoliday, calculateWorkingDays } from '../date-utils';
+import { isFederalHoliday, calculateWorkingDays, validateNoticePeriod } from '../date-utils';
 
 describe('Date Utils', () => {
   describe('isFederalHoliday', () => {
@@ -178,6 +178,44 @@ describe('Date Utils', () => {
       const startDate = new Date('2025-01-31'); // Friday
       const endDate = new Date('2025-02-03');   // Monday
       expect(calculateWorkingDays(startDate, endDate)).toBe(2); // Friday + Monday
+    });
+  });
+
+  describe('validateNoticePeriod', () => {
+    it('should allow requests with sufficient notice', () => {
+      const today = new Date();
+      const futureDate = new Date();
+      futureDate.setDate(today.getDate() + 10);
+      
+      const result = validateNoticePeriod(futureDate, 5);
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should reject requests with insufficient notice for future dates', () => {
+      const today = new Date();
+      const futureDate = new Date();
+      futureDate.setDate(today.getDate() + 2);
+      
+      const result = validateNoticePeriod(futureDate, 5);
+      expect(result.isValid).toBe(false);
+      expect(result.errors[0].code).toBe('INSUFFICIENT_NOTICE');
+    });
+
+    it('should allow requests for past dates (backfilling)', () => {
+      const today = new Date();
+      const pastDate = new Date();
+      pastDate.setDate(today.getDate() - 5);
+      
+      const result = validateNoticePeriod(pastDate, 5);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should allow requests for today', () => {
+      const today = new Date();
+      
+      const result = validateNoticePeriod(today, 5);
+      expect(result.isValid).toBe(true);
     });
   });
 });
