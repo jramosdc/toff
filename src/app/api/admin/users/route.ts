@@ -26,7 +26,7 @@ interface User {
   updated_at?: string;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -45,7 +45,10 @@ export async function GET() {
       return NextResponse.json(errorResponse, { status: 403 });
     }
 
-    let users: StandardUser[] = [];
+    const { searchParams } = new URL(request.url);
+    const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
+
+    let users: any[] = []; // Using any to accommodate the extended structure
 
     // Use production/Prisma first (Vercel environment)
     if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
@@ -59,6 +62,9 @@ export async function GET() {
           role: true,
           createdAt: true,
           updatedAt: true,
+          timeOffBalances: {
+            where: { year }
+          }
         },
         orderBy: {
           name: 'asc'
@@ -66,15 +72,42 @@ export async function GET() {
       });
 
       if (prismaUsers) {
-        // Transform Prisma results to standard format
-        users = prismaUsers.map(user => ({
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role as 'ADMIN' | 'EMPLOYEE',
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        }));
+        // Transform Prisma results to standard format with balances
+        users = prismaUsers.map(user => {
+          const balanceMap = {
+            vacationDays: 0,
+            sickDays: 0,
+            paidLeave: 0,
+            personalDays: 0
+          };
+          const usedMap = {
+            vacationDays: 0,
+            sickDays: 0,
+            paidLeave: 0,
+            personalDays: 0
+          };
+
+          user.timeOffBalances.forEach(b => {
+            const type = b.type as 'VACATION' | 'SICK' | 'PAID_LEAVE' | 'PERSONAL';
+            const key = type === 'VACATION' ? 'vacationDays' :
+                       type === 'SICK' ? 'sickDays' :
+                       type === 'PAID_LEAVE' ? 'paidLeave' : 'personalDays';
+            
+            balanceMap[key] = b.remainingDays;
+            usedMap[key] = b.usedDays;
+          });
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role as 'ADMIN' | 'EMPLOYEE',
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+            balance: balanceMap,
+            usedDays: usedMap
+          };
+        });
       }
     }
     

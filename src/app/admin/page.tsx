@@ -115,7 +115,6 @@ export default function AdminPage() {
         const usersArray = data.users || data; // Fallback to old format if needed
         setUsers(usersArray);
         
-        // Fetch balances for each user
         const balancesMap: Record<string, TimeOffBalance> = {};
         const usedDaysMap: Record<string, {
           vacationDays: number;
@@ -124,25 +123,37 @@ export default function AdminPage() {
         }> = {};
         
         for (const user of usersArray) {
-          // Fetch balance
-          const balanceResponse = await fetch(`/api/admin/balance/${user.id}?year=${currentYear}`);
-          if (balanceResponse.ok) {
-            const balanceData = await balanceResponse.json();
-            balancesMap[user.id] = balanceData;
+          // Use pre-fetched balance and used days if available (optimized path)
+          if (user.balance && user.usedDays) {
+            balancesMap[user.id] = { ...user.balance, userId: user.id, year: currentYear };
+            usedDaysMap[user.id] = user.usedDays;
+            continue;
           }
-          
-          // Fetch used days
-          const usedDaysResponse = await fetch(`/api/admin/used-days/${user.id}?year=${currentYear}`);
-          if (usedDaysResponse.ok) {
-            const usedDaysData = await usedDaysResponse.json();
-            usedDaysMap[user.id] = usedDaysData;
-          } else {
-            // Default to 0 if we can't fetch used days
-            usedDaysMap[user.id] = {
-              vacationDays: 0,
-              sickDays: 0,
-              paidLeave: 0
-            };
+
+          // Fallback to individual fetching (slow path, mostly for dev/sqlite if not updated)
+          try {
+            // Fetch balance
+            const balanceResponse = await fetch(`/api/admin/balance/${user.id}?year=${currentYear}`);
+            if (balanceResponse.ok) {
+              const balanceData = await balanceResponse.json();
+              balancesMap[user.id] = balanceData;
+            }
+            
+            // Fetch used days
+            const usedDaysResponse = await fetch(`/api/admin/used-days/${user.id}?year=${currentYear}`);
+            if (usedDaysResponse.ok) {
+              const usedDaysData = await usedDaysResponse.json();
+              usedDaysMap[user.id] = usedDaysData;
+            } else {
+              // Default to 0 if we can't fetch used days
+              usedDaysMap[user.id] = {
+                vacationDays: 0,
+                sickDays: 0,
+                paidLeave: 0
+              };
+            }
+          } catch (e) {
+            console.error(`Error fetching detailed data for user ${user.id}`, e);
           }
         }
         
