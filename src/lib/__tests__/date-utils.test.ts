@@ -70,20 +70,20 @@ describe('Date Utils', () => {
 
   describe('calculateWorkingDays', () => {
     it('should calculate working days for a single day', () => {
-      const startDate = new Date('2025-01-20'); // Monday
-      const endDate = new Date('2025-01-20');   // Monday
+      const startDate = new Date('2025-01-27'); // Monday (non-holiday)
+      const endDate = new Date('2025-01-27');   // Monday
       expect(calculateWorkingDays(startDate, endDate)).toBe(1);
     });
 
     it('should calculate working days for a week excluding weekends', () => {
-      const startDate = new Date('2025-01-20'); // Monday
-      const endDate = new Date('2025-01-24');   // Friday
+      const startDate = new Date('2025-01-27'); // Monday
+      const endDate = new Date('2025-01-31');   // Friday
       expect(calculateWorkingDays(startDate, endDate)).toBe(5);
     });
 
     it('should exclude weekends from calculation', () => {
-      const startDate = new Date('2025-01-20'); // Monday
-      const endDate = new Date('2025-01-26');   // Sunday
+      const startDate = new Date('2025-01-27'); // Monday
+      const endDate = new Date('2025-02-02');   // Sunday
       expect(calculateWorkingDays(startDate, endDate)).toBe(5); // Monday to Friday only
     });
 
@@ -94,28 +94,28 @@ describe('Date Utils', () => {
     });
 
     it('should handle date range spanning multiple weeks', () => {
-      const startDate = new Date('2025-01-20'); // Monday
-      const endDate = new Date('2025-01-31');   // Friday (next week)
+      const startDate = new Date('2025-01-27'); // Monday
+      const endDate = new Date('2025-02-07');   // Friday (next week)
       // Week 1: Mon-Fri (5 days), Week 2: Mon-Fri (5 days) = 10 working days
       expect(calculateWorkingDays(startDate, endDate)).toBe(10);
     });
 
     it('should handle date range with holidays and weekends', () => {
-      const startDate = new Date('2025-01-20'); // Monday
+      const startDate = new Date('2025-01-20'); // Monday (MLK Day)
       const endDate = new Date('2025-01-27');   // Monday (next week)
-      // Week 1: Mon-Fri (5 days), Week 2: Mon only (1 day) = 6 working days
-      expect(calculateWorkingDays(startDate, endDate)).toBe(6);
+      // Week 1: Mon (Holiday), Tue-Fri (4 days), Week 2: Mon only (1 day) = 5 working days
+      expect(calculateWorkingDays(startDate, endDate)).toBe(5);
     });
 
     it('should handle edge case of same start and end time', () => {
-      const startDate = new Date('2025-01-20T09:00:00');
-      const endDate = new Date('2025-01-20T17:00:00');
+      const startDate = new Date('2025-01-27T09:00:00');
+      const endDate = new Date('2025-01-27T17:00:00');
       expect(calculateWorkingDays(startDate, endDate)).toBe(1);
     });
 
     it('should handle timezone edge cases', () => {
-      const startDate = new Date('2025-01-20T00:00:00');
-      const endDate = new Date('2025-01-20T23:59:59');
+      const startDate = new Date('2025-01-27T00:00:00');
+      const endDate = new Date('2025-01-27T23:59:59');
       expect(calculateWorkingDays(startDate, endDate)).toBe(1);
     });
 
@@ -128,8 +128,8 @@ describe('Date Utils', () => {
     it('should handle year boundary correctly', () => {
       const startDate = new Date('2024-12-30'); // Monday
       const endDate = new Date('2025-01-03');   // Friday
-      // 2024: Mon-Tue (2 days), 2025: Wed-Fri (3 days) = 5 working days
-      expect(calculateWorkingDays(startDate, endDate)).toBe(5);
+      // 2024: Mon (1 day), Tue (NYE Holiday), 2025: Wed (NYD Holiday), Thu-Fri (2 days) = 3 working days
+      expect(calculateWorkingDays(startDate, endDate)).toBe(3);
     });
 
     it('should handle invalid date inputs gracefully', () => {
@@ -169,8 +169,8 @@ describe('Date Utils', () => {
     });
 
     it('should handle dates with different time components', () => {
-      const startDate = new Date('2025-01-20T08:00:00');
-      const endDate = new Date('2025-01-20T18:00:00');
+      const startDate = new Date('2025-01-27T08:00:00');
+      const endDate = new Date('2025-01-27T18:00:00');
       expect(calculateWorkingDays(startDate, endDate)).toBe(1);
     });
 
