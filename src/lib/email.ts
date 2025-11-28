@@ -6,24 +6,42 @@ import { prisma, isPrismaEnabled } from './db';
 // In production, you should use a real SMTP service
 let transporter: nodemailer.Transporter;
 
+// Helper to get email settings from DB
+async function getEmailSettingsFromDB() {
+  if (isPrismaEnabled && prisma) {
+    try {
+      const row = await (prisma as any).emailSettings?.findFirst?.();
+      if (row) return { user: row.userEmail, pass: row.userPass };
+    } catch (e) {
+      console.error('Error fetching email settings:', e);
+    }
+  }
+  return null;
+}
+
 // Initialize the email transporter
 export async function initializeEmailTransporter() {
-  if (transporter) return transporter;
+  // Always fetch latest settings in case they changed
+  // In a high-load app we might cache this, but for now correctness is priority
+  const dbSettings = await getEmailSettingsFromDB();
   
   // Use environment variables for email configuration
-  // If running on Vercel, don't use localhost SMTP
-  if (process.env.VERCEL) {
+  // If running on Vercel or if we have DB settings, use real SMTP
+  if (process.env.VERCEL || dbSettings) {
     // For production, use proper SMTP configuration with authentication
-    // Read user/pass from DB settings if present
     let user = process.env.EMAIL_SERVER_USER;
     let pass = process.env.EMAIL_SERVER_PASSWORD;
-    try {
-      if (isPrismaEnabled && prisma) {
-        const row = await (prisma as any).emailSettings?.findFirst?.();
-        if (row?.userEmail) user = row.userEmail;
-        if (row?.userPass) pass = row.userPass;
-      }
-    } catch {}
+    
+    if (dbSettings) {
+      if (dbSettings.user) user = dbSettings.user;
+      if (dbSettings.pass) pass = dbSettings.pass;
+    }
+    
+    // If we have a transporter already configured with the SAME credentials, reuse it
+    // But since we can't easily check internal credentials, we'll recreate if settings exist
+    // to ensure we use the latest.
+    // Optimization: check if global cached user matches.
+    
     transporter = nodemailer.createTransport({
       host: process.env.EMAIL_SERVER_HOST,
       port: process.env.EMAIL_SERVER_PORT ? parseInt(process.env.EMAIL_SERVER_PORT) : 587,
@@ -34,22 +52,24 @@ export async function initializeEmailTransporter() {
       },
     });
     
-    console.log('Email transporter configured for production with host:', process.env.EMAIL_SERVER_HOST);
+    console.log('Email transporter configured with host:', process.env.EMAIL_SERVER_HOST);
   } else {
-    // For development, use Ethereal test account
-    const testAccount = await nodemailer.createTestAccount();
-    
-    transporter = nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: {
-        user: testAccount.user,
-        pass: testAccount.pass,
-      },
-    });
-    
-    console.log('Email transporter configured for development with Ethereal');
+    // For development without DB settings, use Ethereal test account
+    if (!transporter) {
+      const testAccount = await nodemailer.createTestAccount();
+      
+      transporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
+      });
+      
+      console.log('Email transporter configured for development with Ethereal');
+    }
   }
   
   return transporter;
@@ -67,22 +87,32 @@ export async function sendNotificationEmail({
 }) {
   try {
     const emailTransporter = await initializeEmailTransporter();
+    const dbSettings = await getEmailSettingsFromDB();
+    
+    // Determine 'from' address
+    // If DB settings exist, use that email. Otherwise fallback to env var.
+    let from = process.env.EMAIL_FROM || '"TOFF System" <notifications@toff.app>';
+    if (dbSettings?.user) {
+      // Use the configured email as the sender
+      // We can add a display name if desired, e.g. "TOFF System" <email>
+      from = `"TOFF System" <${dbSettings.user}>`;
+    }
     
     const mailOptions = {
-      from: process.env.EMAIL_FROM || '"TOFF System" <notifications@toff.app>',
+      from,
       to,
       subject,
       html,
     };
     
-    console.log('Sending email to:', to, 'with subject:', subject);
+    console.log('Sending email to:', to, 'from:', from, 'with subject:', subject);
     const info = await emailTransporter.sendMail(mailOptions);
     
     // For development, log the URL where you can preview the email
-    if (!process.env.VERCEL) {
+    if (!process.env.VERCEL && !dbSettings) {
       console.log('Email preview URL: %s', nodemailer.getTestMessageUrl(info));
     } else {
-      console.log('Email sent successfully in production:', info.messageId);
+      console.log('Email sent successfully:', info.messageId);
     }
     
     return info;
@@ -198,38 +228,32 @@ interface EmailPayload {
 // Helper to send email with custom transporter options
 export const sendEmail = async (data: EmailPayload) => {
   try {
-    // In production, always use the configured transporter
-    if (process.env.VERCEL) {
-      const emailTransporter = await initializeEmailTransporter();
-      
-      console.log('Sending email to:', data.to, 'with subject:', data.subject);
-      const info = await emailTransporter.sendMail({
-        from: process.env.EMAIL_FROM || '"TOFF System" <notifications@toff.app>',
-        ...data,
-      });
-      
-      console.log('Email sent successfully:', info.messageId);
-      return info;
-    } else {
-      // For development, use local SMTP options
-      const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_SERVER_HOST || 'smtp.ethereal.email',
-        port: Number(process.env.EMAIL_SERVER_PORT) || 587,
-        secure: false,
-        auth: {
-          user: process.env.EMAIL_SERVER_USER,
-          pass: process.env.EMAIL_SERVER_PASSWORD,
-        },
-      });
-      
-      const info = await transporter.sendMail({
-        from: process.env.EMAIL_FROM || '"TOFF System" <notifications@toff.app>',
-        ...data,
-      });
-      
-      console.log('Email preview URL: %s', nodemailer.getTestMessageUrl(info));
-      return info;
+    const emailTransporter = await initializeEmailTransporter();
+    const dbSettings = await getEmailSettingsFromDB();
+    
+    // Determine 'from' address
+    let from = process.env.EMAIL_FROM || '"TOFF System" <notifications@toff.app>';
+    if (dbSettings?.user) {
+      from = `"TOFF System" <${dbSettings.user}>`;
     }
+
+    // Merge computed 'from' with data (data.from takes precedence if set, though usually it isn't)
+    const mailOptions = {
+      from, 
+      ...data,
+    };
+    
+    console.log('Sending email to:', data.to, 'from:', mailOptions.from, 'with subject:', data.subject);
+    
+    const info = await emailTransporter.sendMail(mailOptions);
+      
+    // For development, log the URL where you can preview the email
+    if (!process.env.VERCEL && !dbSettings) {
+      console.log('Email preview URL: %s', nodemailer.getTestMessageUrl(info));
+    } else {
+      console.log('Email sent successfully:', info.messageId);
+    }
+    return info;
   } catch (error) {
     console.error('Error sending email:', error);
     throw error;
