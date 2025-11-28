@@ -54,7 +54,7 @@ function createUtcMidnightDate(year: number, month: number, day: number): Date {
 function isFixedDateHoliday(date: Date): boolean {
   const { month, day } = getUtcCalendarParts(date);
   const dateString = `${month}-${day}`;
-  const fixed = new Set(['1-1', '6-19', '7-4', '11-11', '12-25']);
+  const fixed = new Set(['1-1', '6-19', '7-4', '11-11', '12-24', '12-25', '12-31']);
   return fixed.has(dateString);
 }
 
@@ -69,7 +69,9 @@ export function isFederalHoliday(date: Date): boolean {
     '6-19',  // Juneteenth
     '7-4',   // Independence Day
     '11-11', // Veterans Day
+    '12-24', // Christmas Eve
     '12-25', // Christmas Day
+    '12-31', // New Year's Eve
   ]);
   
   // Check fixed date holidays first
@@ -130,16 +132,17 @@ export function calculateWorkingDays(start: Date, end: Date): number {
     const current = new Date(startUtc);
     const dow = current.getUTCDay();
     if (dow === 0 || dow === 6) return 0;
-    return isFixedDateHoliday(current) ? 0 : 1;
+    return isFederalHoliday(current) ? 0 : 1;
   }
 
-  // Multi-day inclusive: count weekdays only (holidays included per tests)
+  // Multi-day inclusive: count weekdays only, excluding holidays
   let count = 0;
   const oneDayMs = 24 * 60 * 60 * 1000;
   for (let t = startUtc; t <= endUtc; t += oneDayMs) {
     const current = new Date(t);
     const dow = current.getUTCDay();
-    if (dow !== 0 && dow !== 6) {
+    // Exclude weekends (0=Sun, 6=Sat) and federal holidays
+    if (dow !== 0 && dow !== 6 && !isFederalHoliday(current)) {
       count += 1;
     }
   }
