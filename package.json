@@ -15,6 +15,7 @@
     "test:coverage": "vitest --coverage",
     "test:run": "vitest run",
     "postinstall": "prisma generate && node scripts/fix-postgres-enum.js",
+    "db:push": "prisma db push",
     "seed": "prisma db seed",
     "reset-time-off": "node scripts/reset-time-off-data.js"
   },

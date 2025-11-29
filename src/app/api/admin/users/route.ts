@@ -60,6 +60,10 @@ export async function GET(request: Request) {
           email: true,
           name: true,
           role: true,
+          supervisorId: true,
+          supervisor: {
+            select: { id: true, name: true }
+          },
           createdAt: true,
           updatedAt: true,
           timeOffBalances: {
@@ -102,6 +106,8 @@ export async function GET(request: Request) {
             email: user.email,
             name: user.name,
             role: user.role as 'ADMIN' | 'EMPLOYEE',
+            supervisorId: user.supervisorId,
+            supervisorName: user.supervisor?.name,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
             balance: balanceMap,
