@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { LoginSchema } from '@/lib/validators/schemas';
+import { z } from 'zod';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -15,6 +17,20 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Validate input before sending to server
+    try {
+      if (isEmailSignIn) {
+        LoginSchema.pick({ email: true }).parse({ email });
+      } else {
+        LoginSchema.parse({ email, password });
+      }
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        setError(err.errors[0].message);
+        return;
+      }
+    }
 
     if (isEmailSignIn) {
       try {
