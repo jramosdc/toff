@@ -131,8 +131,8 @@ describe('Time Off Request Schema Validation', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should reject empty reason', () => {
-    const invalidRequest = {
+  it('should allow empty reason', () => {
+    const validRequest = {
       userId: '123e4567-e89b-12d3-a456-426614174000',
       startDate: '2025-01-20T00:00:00.000Z',
       endDate: '2025-01-24T00:00:00.000Z',
@@ -140,11 +140,8 @@ describe('Time Off Request Schema Validation', () => {
       reason: ''
     };
 
-    const result = CreateTimeOffRequestSchema.safeParse(invalidRequest);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toContain('Reason is required');
-    }
+    const result = CreateTimeOffRequestSchema.safeParse(validRequest);
+    expect(result.success).toBe(true);
   });
 
   it('should reject reason that is too long', () => {

@@ -237,7 +237,14 @@ export default function DashboardPage() {
       } else {
         const errorData = await response.json();
         console.error('Error submitting time off request:', errorData);
-        alert(`Failed to submit request: ${errorData.error}`);
+        
+        let errorMessage = errorData.error;
+        if (errorData.details && Array.isArray(errorData.details)) {
+           const details = errorData.details.map((d: any) => `${d.field}: ${d.message}`).join('\n');
+           errorMessage += `\n\n${details}`;
+        }
+        
+        alert(`Failed to submit request: ${errorMessage}`);
       }
     } catch (error) {
       console.error('Error submitting time off request:', error);

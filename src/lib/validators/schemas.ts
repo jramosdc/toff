@@ -40,7 +40,7 @@ export const CreateTimeOffRequestSchema = z.object({
   startDate: z.string().refine(isParsableDateString, 'Invalid date'),
   endDate: z.string().refine(isParsableDateString, 'Invalid date'),
   type: z.string().refine((v) => (AllowedTimeOffTypes as readonly string[]).includes(v), { message: 'Invalid enum value' }),
-  reason: z.string().min(1, 'Reason is required').max(500, 'Reason must be less than 500 characters').optional()
+  reason: z.string().max(500, 'Reason must be less than 500 characters').optional()
 }).refine(
   (data) => new Date(data.startDate) <= new Date(data.endDate),
   {
