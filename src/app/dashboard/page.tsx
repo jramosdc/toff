@@ -136,7 +136,7 @@ export default function DashboardPage() {
   });
   const [overtimeError, setOvertimeError] = useState('');
   const [overtimeToast, setOvertimeToast] = useState<string | null>(null);
-  const [isLastWeek, setIsLastWeek] = useState(false);
+  // const [isLastWeek, setIsLastWeek] = useState(false); // Removed last week constraint
   const [isSubmittingOvertime, setIsSubmittingOvertime] = useState(false);
 
   useEffect(() => {
@@ -147,16 +147,18 @@ export default function DashboardPage() {
       fetchRequests();
       fetchOvertimeRequests();
       fetchUsedDays();
-      checkIfLastWeekOfMonth();
+      // checkIfLastWeekOfMonth(); // Removed last week constraint
     }
   }, [session, status]);
 
+  /*
   const checkIfLastWeekOfMonth = () => {
     const today = new Date();
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     const daysUntilEndOfMonth = lastDayOfMonth.getDate() - today.getDate();
     setIsLastWeek(daysUntilEndOfMonth < 7);
   };
+  */
 
   const fetchBalance = async () => {
     const response = await fetch('/api/time-off/balance');
@@ -562,11 +564,13 @@ export default function DashboardPage() {
                     {overtimeError}
                   </div>
                 )}
+                {/* 
                 {!isLastWeek && (
                   <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
                     Overtime requests can only be submitted during the last week of the month.
                   </div>
                 )}
+                */}
                 <form onSubmit={handleSubmitOvertimeRequest} className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
@@ -613,9 +617,9 @@ export default function DashboardPage() {
                   <div>
                     <button
                       type="submit"
-                      disabled={!isLastWeek || isSubmittingOvertime}
+                      disabled={isSubmittingOvertime}
                       className={`inline-flex items-center gap-2 justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white ${
-                        isLastWeek && !isSubmittingOvertime ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'
+                        !isSubmittingOvertime ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'
                       } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors`}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M5 4h14a1 1 0 0 1 .8 1.6l-6.2 8.27V20l-3-2v-4.13L4.2 5.6A1 1 0 0 1 5 4Z"/></svg>

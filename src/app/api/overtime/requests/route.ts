@@ -128,13 +128,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Hours must be a positive number' }, { status: 400 });
     }
 
-    // Check if it's the last week of the month
+    /*
+    // Check if it's the last week of the month (constraint removed)
     if (!isLastWeekOfMonth()) {
       return NextResponse.json(
         { error: 'Overtime requests can only be submitted during the last week of the month' },
         { status: 403 }
       );
     }
+    */
 
     const today = new Date();
     const requestId = randomUUID();
