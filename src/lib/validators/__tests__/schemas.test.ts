@@ -20,6 +20,18 @@ describe('Time Off Request Schema Validation', () => {
     expect(result.success).toBe(true);
   });
 
+  it('should validate request without user ID (optional)', () => {
+    const validRequest = {
+      startDate: '2025-01-20T00:00:00.000Z',
+      endDate: '2025-01-24T00:00:00.000Z',
+      type: 'VACATION',
+      reason: 'Annual family vacation'
+    };
+
+    const result = CreateTimeOffRequestSchema.safeParse(validRequest);
+    expect(result.success).toBe(true);
+  });
+
   it('should reject invalid user ID', () => {
     const invalidRequest = {
       userId: 'invalid-uuid',
