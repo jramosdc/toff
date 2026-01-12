@@ -6,7 +6,7 @@ import db, { prisma, isPrismaEnabled } from '@/lib/db';
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user || session.user.role !== 'ADMIN') {
+  if (!session?.user || !['ADMIN', 'MANAGER'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -15,12 +15,6 @@ export async function GET(request: Request) {
     const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString());
     const status = searchParams.get('status') || null;
     const userId = searchParams.get('userId');
-    
-    console.log("Fetching admin requests for year:", year, "status:", status, "userId:", userId);
-    console.log("DATABASE_URL:", process.env.DATABASE_URL);
-    console.log("isPrismaEnabled:", isPrismaEnabled);
-    console.log("Prisma client available:", !!prisma);
-    console.log("VERCEL:", process.env.VERCEL);
     
     // Use Prisma in production
     if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
@@ -49,6 +43,13 @@ export async function GET(request: Request) {
       
       if (userId) {
         whereClause.userId = userId;
+      }
+
+      // If user is a MANAGER (and not ADMIN), only show requests from their subordinates
+      if (session.user.role === 'MANAGER') {
+        whereClause.user = {
+          supervisorId: session.user.id
+        };
       }
       
       const requests = await prisma?.timeOffRequest.findMany({

@@ -49,12 +49,13 @@ export async function GET() {
     // Prefer Prisma on Vercel/production if available
     if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
       try {
+        if (!prisma) {
+          console.warn('Prisma expected but not available in GET /overtime/requests');
+          throw new Error('Prisma client unavailable');
+        }
+
         if (session.user.role === 'ADMIN') {
           // Pending only for admin view
-          if (!prisma) {
-            console.warn('Prisma expected but not available in GET /overtime/requests');
-            throw new Error('Prisma client unavailable');
-          }
           const rows = await prisma.$queryRaw<any[]>`
             SELECT o.*, u.name as user_name
              FROM overtime_requests o
@@ -63,11 +64,18 @@ export async function GET() {
             ORDER BY o."createdAt" DESC
           `;
           return NextResponse.json(rows);
+        } else if (session.user.role === 'MANAGER') {
+          // Managers see pending requests from their subordinates
+          const rows = await prisma.$queryRaw<any[]>`
+            SELECT o.*, u.name as user_name
+             FROM overtime_requests o
+            JOIN "User" u ON o."userId"::text = u.id
+             WHERE o.status = 'PENDING'
+             AND u."supervisorId" = ${session.user.id}
+            ORDER BY o."createdAt" DESC
+          `;
+          return NextResponse.json(rows);
         } else {
-          if (!prisma) {
-            console.warn('Prisma expected but not available in GET /overtime/requests');
-            throw new Error('Prisma client unavailable');
-          }
           console.log('Overtime GET: user branch (Prisma)');
           const rows = await prisma.$queryRaw<any[]>`
             SELECT *
@@ -209,75 +217,91 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No database connection available' }, { status: 500 });
     }
 
-    // Send email notifications to all admin users
+    // Send email notifications
     try {
-      // Get user details
-      let user;
-      
-      if (process.env.VERCEL || isPrismaEnabled) {
-        stage = 'fetch-user-for-email';
-        user = await prisma?.user.findUnique({
-          where: { id: userIdToUse }
-        });
-      } else {
-        stage = 'sqlite-fetch-user-for-email';
-        user = (dbOperations as any).getUserById.get(userIdToUse) as User;
-      }
-      
-      if (!user) {
-        console.error("Could not find user for email notification");
-        return NextResponse.json({ id: requestId, status: 'PENDING' }, { status: 201 });
-      }
-      
-      // Get admin email
+      // Get admin email from env
       const adminEmail = process.env.ADMIN_EMAIL;
       
+      // Determine recipient(s)
       if (adminEmail) {
         // If a specific admin email is configured, use that
-        await sendOvertimeRequestNotification({
-          employeeName: user.name,
-          employeeEmail: user.email,
-          hours,
-          requestDate,
-          notes: notes || undefined,
-          adminEmail,
-          requestId
-        });
-      } else if (process.env.VERCEL || isPrismaEnabled) {
-        // Get admin users with Prisma
-        stage = 'fetch-admins';
-        const adminUsers = await prisma?.user.findMany({
-          where: { role: 'ADMIN' }
-        });
-        
-        for (const admin of adminUsers || []) {
-          stage = 'send-email';
+        const user = await prisma?.user.findUnique({ where: { id: userIdToUse } });
+        if (user) {
           await sendOvertimeRequestNotification({
             employeeName: user.name,
             employeeEmail: user.email,
             hours,
             requestDate,
             notes: notes || undefined,
-            adminEmail: admin.email,
+            adminEmail,
             requestId
           });
         }
-      } else {
-        // Get admin users with SQLite
-        stage = 'sqlite-fetch-admins';
-        const adminUsers = (dbOperations as any).getAdminUsers.all() as AdminUser[];
+      } else if (process.env.VERCEL || isPrismaEnabled) {
+        // Prisma logic: Check for supervisor
+        stage = 'fetch-user-for-email';
+        const userWithSupervisor = await prisma?.user.findUnique({
+          where: { id: userIdToUse },
+          include: { supervisor: true }
+        });
         
-        for (const admin of adminUsers) {
-          stage = 'send-email';
-          await sendOvertimeRequestNotification({
-            employeeName: user.name,
-            employeeEmail: user.email,
-            hours,
-            requestDate,
-            notes: notes || undefined,
-            adminEmail: admin.email,
-            requestId
-          });
+        if (userWithSupervisor) {
+          const supervisorEmail = userWithSupervisor.supervisor?.email;
+          
+          if (supervisorEmail) {
+            // Send to Supervisor
+            stage = 'send-email-supervisor';
+            await sendOvertimeRequestNotification({
+              employeeName: userWithSupervisor.name,
+              employeeEmail: userWithSupervisor.email,
+              hours,
+              requestDate,
+              notes: notes || undefined,
+              adminEmail: supervisorEmail,
+              requestId
+            });
+          } else {
+            // Fallback: Send to all Admins
+            stage = 'fetch-admins';
+            const adminUsers = await prisma?.user.findMany({
+              where: { role: 'ADMIN' }
+            });
+            
+            for (const admin of adminUsers || []) {
+              stage = 'send-email-admin';
+              await sendOvertimeRequestNotification({
+                employeeName: userWithSupervisor.name,
+                employeeEmail: userWithSupervisor.email,
+                hours,
+                requestDate,
+                notes: notes || undefined,
+                adminEmail: admin.email,
+                requestId
+              });
+            }
+          }
+        }
+      } else {
+        // SQLite fallback (Admins only)
+        stage = 'sqlite-fetch-user-for-email';
+        const user = (dbOperations as any).getUserById.get(userIdToUse) as User;
+        
+        if (user) {
+          stage = 'sqlite-fetch-admins';
+          const adminUsers = (dbOperations as any).getAdminUsers.all() as AdminUser[];
+          
+          for (const admin of adminUsers) {
+            stage = 'send-email';
+            await sendOvertimeRequestNotification({
+              employeeName: user.name,
+              employeeEmail: user.email,
+              hours,
+              requestDate,
+              notes: notes || undefined,
+              adminEmail: admin.email,
+              requestId
+            });
+          }
         }
       }
     } catch (emailError) {
