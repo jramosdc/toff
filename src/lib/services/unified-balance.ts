@@ -1,13 +1,23 @@
-import { 
-  UnifiedTimeOffBalance, 
-  LegacyTimeOffBalance, 
+import {
+  UnifiedTimeOffBalance,
   ModernTimeOffBalance,
-  legacyToUnified,
   modernToUnified,
-  unifiedToModern 
+  unifiedToModern
 } from '../types/unified-balance';
 import db, { dbOperations, prisma, isPrismaEnabled } from '../db';
 import { randomUUID } from 'crypto';
+
+interface SQLiteBalanceRow {
+  id: string;
+  userId: string;
+  year: number;
+  type: 'VACATION' | 'SICK' | 'PAID_LEAVE' | 'PERSONAL';
+  totalDays: number;
+  usedDays: number;
+  remainingDays: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export class UnifiedBalanceService {
   /**
@@ -46,15 +56,23 @@ export class UnifiedBalanceService {
       
       // Fallback to SQLite (development)
       else if (db && dbOperations) {
-        console.log("Fetching balance using SQLite");
-        
-        const balance = dbOperations.getUserTimeOffBalance(userId, year) as LegacyTimeOffBalance | undefined;
-        
-        if (!balance) {
-          return null;
-        }
+        const rows = dbOperations.getAllUserTimeOffBalances(userId, year) as SQLiteBalanceRow[];
 
-        return legacyToUnified(balance);
+        if (!rows.length) return null;
+
+        const byType = Object.fromEntries(rows.map(r => [r.type, r]));
+        const base = rows[0];
+        return {
+          id: `${userId}_${year}`,
+          userId,
+          year,
+          vacationDays: Number(byType['VACATION']?.remainingDays ?? 0),
+          sickDays: Number(byType['SICK']?.remainingDays ?? 0),
+          paidLeave: Number(byType['PAID_LEAVE']?.remainingDays ?? 0),
+          personalDays: Number(byType['PERSONAL']?.remainingDays ?? 0),
+          createdAt: base.createdAt ? new Date(base.createdAt) : undefined,
+          updatedAt: base.updatedAt ? new Date(base.updatedAt) : undefined,
+        };
       }
       
       throw new Error("No database connection available");
@@ -93,38 +111,22 @@ export class UnifiedBalanceService {
       
       // Fallback to SQLite
       else if (db && dbOperations) {
-        console.log("Updating balance using SQLite");
-        
-        const legacy: LegacyTimeOffBalance = {
-          id: balance.id,
-          user_id: balance.userId,
-          vacation_days: balance.vacationDays,
-          sick_days: balance.sickDays,
-          paid_leave: balance.paidLeave,
-          personal_days: balance.personalDays,
-          year: balance.year,
-        };
+        const types: Array<['VACATION' | 'SICK' | 'PAID_LEAVE' | 'PERSONAL', number]> = [
+          ['VACATION', balance.vacationDays],
+          ['SICK', balance.sickDays],
+          ['PAID_LEAVE', balance.paidLeave],
+          ['PERSONAL', balance.personalDays],
+        ];
 
-        // Try to update existing, create if not exists
-        try {
-          dbOperations.updateTimeOffBalance.run(
-            legacy.vacation_days,
-            legacy.sick_days,
-            legacy.paid_leave,
-            legacy.personal_days,
-            legacy.user_id,
-            legacy.year
-          );
-        } catch {
-          // If update fails, create new
-          dbOperations.createTimeOffBalance.run(
-            legacy.id,
-            legacy.user_id,
-            legacy.vacation_days,
-            legacy.sick_days,
-            legacy.paid_leave,
-            legacy.personal_days,
-            legacy.year
+        for (const [type, days] of types) {
+          dbOperations.createOrUpdateTimeOffBalance(
+            randomUUID(),
+            balance.userId,
+            balance.year,
+            type,
+            days,
+            0,
+            days
           );
         }
       }

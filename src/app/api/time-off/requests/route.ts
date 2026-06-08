@@ -90,14 +90,14 @@ export async function GET() {
             const stmt = db.prepare(`
               SELECT t.*, u.name as user_name, u.email as user_email
               FROM time_off_requests t
-              JOIN users u ON t.user_id = u.id
+              JOIN users u ON t.userId = u.id
               WHERE t.status = ?
             `);
             requests = stmt.all('PENDING');
           } else {
             const stmt = db.prepare(`
               SELECT * FROM time_off_requests
-              WHERE user_id = ?
+              WHERE userId = ?
             `);
             requests = stmt.all(userId);
           }
@@ -250,11 +250,11 @@ export async function POST(req: NextRequest) {
       
       // Check for existing request with same parameters
       const existingRequest = db.prepare(`
-        SELECT * FROM time_off_requests 
-        WHERE user_id = ? 
-        AND start_date = ? 
-        AND end_date = ? 
-        AND type = ? 
+        SELECT * FROM time_off_requests
+        WHERE userId = ?
+        AND startDate = ?
+        AND endDate = ?
+        AND type = ?
         AND status IN ('PENDING', 'APPROVED')
       `).get(
         effectiveUserId, 
