@@ -16,7 +16,7 @@ interface TimeOffBalance {
 }
 
 // Check if we're using Prisma with PostgreSQL or running on Vercel
-export const isPrismaEnabled = process.env.VERCEL || process.env.DATABASE_URL?.includes('postgresql') || process.env.USE_PRISMA === 'true';
+export const isPrismaEnabled = !!(process.env.VERCEL || process.env.DATABASE_URL?.startsWith('postgres') || process.env.USE_PRISMA === 'true');
 
 // Properly declare global prisma type
 declare global {
@@ -37,7 +37,7 @@ export const prisma = prismaClient;
 
 // Initialize SQLite only if not using Prisma and not on Vercel
 const db = (!isPrismaEnabled && !process.env.VERCEL) 
-  ? new Database(join(process.cwd(), 'toff.db'), { verbose: console.log })
+  ? new Database(join(process.cwd(), 'toff.db'))
   : null;
 
 // Initialize database tables only if using SQLite

@@ -68,12 +68,10 @@ export async function GET(
       console.log("Using SQLite to fetch user time off requests");
       // Create a custom query to get all requests for the user for the specified year
       const requests = db.prepare(`
-        SELECT * FROM time_off_requests 
-        WHERE user_id = ? 
-        AND (
-          (strftime('%Y', start_date) = ? OR strftime('%Y', end_date) = ?)
-        )
-        ORDER BY start_date DESC
+        SELECT * FROM time_off_requests
+        WHERE userId = ?
+        AND (strftime('%Y', startDate) = ? OR strftime('%Y', endDate) = ?)
+        ORDER BY startDate DESC
       `).all(userId, year.toString(), year.toString());
 
       return NextResponse.json(requests);

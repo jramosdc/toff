@@ -54,8 +54,8 @@ export async function GET(
     } else if (db) {
       console.log("Using SQLite to fetch time off request");
       const query = `
-        SELECT * FROM time_off_requests 
-        WHERE id = ? AND user_id = ?
+        SELECT * FROM time_off_requests
+        WHERE id = ? AND userId = ?
       `;
       const timeOffRequest = db.prepare(query).get(requestId, session.user.id);
 
@@ -409,10 +409,10 @@ export async function PATCH(
       const checkQuery = `SELECT * FROM time_off_requests WHERE id = ?`;
       const existingRequest = db.prepare(checkQuery).get(requestId) as {
         id: string;
-        user_id: string;
+        userId: string;
         status: string;
-        start_date: string;
-        end_date: string;
+        startDate: string;
+        endDate: string;
         type: string;
         reason?: string;
       } | undefined;
@@ -425,7 +425,7 @@ export async function PATCH(
       }
 
       // Check if the user is the owner of the request or an admin
-      if (existingRequest.user_id !== session.user.id && session.user.role !== 'ADMIN') {
+      if (existingRequest.userId !== session.user.id && session.user.role !== 'ADMIN') {
         return NextResponse.json(
           { error: 'Unauthorized to update this request' },
           { status: 403 }
@@ -434,195 +434,61 @@ export async function PATCH(
 
       // Process approval - update balance if changing to approved
       if (status === 'APPROVED' && existingRequest.status !== 'APPROVED') {
-        console.log("Approving time off request - checking for overlapping approved requests");
-        
-        // Check if there are any other APPROVED requests for the same user with overlapping dates
         const overlappingApproved = db.prepare(`
-          SELECT * FROM time_off_requests 
-          WHERE user_id = ? AND status = 'APPROVED' AND id != ? AND
-          (
-            (start_date <= ? AND end_date >= ?) OR
-            (start_date <= ? AND end_date >= ?) OR  
-            (start_date >= ? AND start_date <= ?) OR
-            (end_date >= ? AND end_date <= ?)
-          )
+          SELECT * FROM time_off_requests
+          WHERE userId = ? AND status = 'APPROVED' AND id != ?
+            AND startDate <= ? AND endDate >= ?
         `).all(
-          existingRequest.user_id, 
-          existingRequest.id, 
-          existingRequest.end_date, existingRequest.start_date,    // Existing request encompasses this one
-          existingRequest.start_date, existingRequest.end_date,    // This request encompasses existing one
-          existingRequest.start_date, existingRequest.end_date,    // Existing start overlaps
-          existingRequest.start_date, existingRequest.end_date     // Existing end overlaps
-        ) as Array<{
-          id: string;
-          user_id: string;
-          start_date: string;
-          end_date: string;
-          type: string;
-          status: string;
-        }>;
-        
+          existingRequest.userId,
+          existingRequest.id,
+          existingRequest.endDate,
+          existingRequest.startDate
+        ) as Array<{ type: string; startDate: string; endDate: string }>;
+
         if (overlappingApproved.length > 0) {
-          const conflictingRequest = overlappingApproved[0];
+          const conflict = overlappingApproved[0];
           return NextResponse.json(
-            { 
-              error: `Cannot approve this request. There is already an approved ${conflictingRequest.type.toLowerCase().replace('_', ' ')} request from ${conflictingRequest.start_date.split('T')[0]} to ${conflictingRequest.end_date.split('T')[0]} that overlaps with these dates.`
+            {
+              error: `Cannot approve this request. There is already an approved ${conflict.type.toLowerCase().replace('_', ' ')} request from ${conflict.startDate.split('T')[0]} to ${conflict.endDate.split('T')[0]} that overlaps with these dates.`
             },
             { status: 400 }
           );
         }
-        
-        console.log("No overlapping approved requests found - proceeding with approval");
+
         const currentYear = new Date().getFullYear();
-        
-        // Calculate the number of days for this time off request
-        const startDate = new Date(existingRequest.start_date);
-        const endDate = new Date(existingRequest.end_date);
+        const startDate = new Date(existingRequest.startDate);
+        const endDate = new Date(existingRequest.endDate);
         const daysRequested = calculateWorkingDays(startDate, endDate);
-        
-        console.log("Request from", startDate, "to", endDate, "equals", daysRequested, "working days");
-        
-        // Validate the calculated days
+
         if (isNaN(daysRequested) || daysRequested <= 0) {
-          console.error("Invalid days calculation:", daysRequested);
           return NextResponse.json(
             { error: 'Invalid date range or calculation error. Please check the request dates.' },
             { status: 400 }
           );
         }
-        
-        try {
-          // Use raw SQL to handle both schema types
-          // First, try to find a balance record for this specific type (new schema)
-          if (!prisma) {
-            throw new Error("Prisma client not available");
-          }
-          
-          const newSchemaBalance = await prisma.$queryRaw<Array<{
-            id: string;
-            totalDays: number;
-            usedDays: number;
-            remainingDays: number;
-          }>>`
-            SELECT id, "totalDays", "usedDays", "remainingDays" 
-            FROM "TimeOffBalance" 
-            WHERE "userId" = ${existingRequest.user_id} 
-            AND year = ${currentYear} 
-            AND type = ${existingRequest.type}::"TimeOffType"
-            LIMIT 1
-          `;
-          
-          if (newSchemaBalance && newSchemaBalance.length > 0) {
-            // New schema logic
-            const balance = newSchemaBalance[0];
-            console.log("Using new schema - User balance for", existingRequest.type, ":", balance);
-            
-            if (isNaN(balance.remainingDays) || balance.remainingDays < daysRequested) {
-              console.error("Invalid balance or insufficient days:", balance.remainingDays, "requested:", daysRequested);
-              return NextResponse.json(
-                { error: `Not enough ${existingRequest.type.toLowerCase().replace('_', ' ')} days available. Available: ${balance.remainingDays}, Requested: ${daysRequested}` },
-                { status: 400 }
-              );
-            }
-            
-            const newUsedDays = balance.usedDays + daysRequested;
-            const newRemainingDays = balance.remainingDays - daysRequested;
-            
-            if (isNaN(newUsedDays) || isNaN(newRemainingDays)) {
-              console.error("Calculation resulted in NaN:", balance.usedDays, "+", daysRequested, "or", balance.remainingDays, "-", daysRequested);
-              return NextResponse.json(
-                { error: 'Calculation error when updating balance.' },
-                { status: 500 }
-              );
-            }
-            
-            // Update using raw SQL
-            await prisma.$executeRaw`
-              UPDATE "TimeOffBalance" 
-              SET "usedDays" = ${newUsedDays}, "remainingDays" = ${newRemainingDays}, "updatedAt" = NOW()
-              WHERE id = ${balance.id}
-            `;
-            
-            console.log(`Deducted ${daysRequested} ${existingRequest.type.toLowerCase().replace('_', ' ')} days from balance. New remaining: ${newRemainingDays}, Used: ${newUsedDays}`);
-            
-          } else {
-            // Try old schema format
-            const oldSchemaBalance = await prisma.$queryRaw<Array<{
-              id: string;
-              vacationDays: number;
-              sickDays: number;
-              paidLeave: number;
-              personalDays: number;
-            }>>`
-              SELECT id, "vacationDays", "sickDays", "paidLeave", "personalDays"
-              FROM "TimeOffBalance" 
-              WHERE "userId" = ${existingRequest.user_id} 
-              AND year = ${currentYear}
-              LIMIT 1
-            `;
-            
-            if (!oldSchemaBalance || oldSchemaBalance.length === 0) {
-              return NextResponse.json(
-                { error: 'User time off balance not found' },
-                { status: 404 }
-              );
-            }
-            
-            const balance = oldSchemaBalance[0];
-            console.log("Using old schema - User balance:", balance);
-            
-            let availableDays: number;
-            let updateField: string;
-            
-            switch (existingRequest.type) {
-              case 'VACATION':
-                availableDays = balance.vacationDays || 0;
-                updateField = 'vacationDays';
-                break;
-              case 'SICK':
-                availableDays = balance.sickDays || 0;
-                updateField = 'sickDays';
-                break;
-              case 'PAID_LEAVE':
-                availableDays = balance.paidLeave || 0;
-                updateField = 'paidLeave';
-                break;
-              case 'PERSONAL':
-                availableDays = balance.personalDays || 0;
-                updateField = 'personalDays';
-                break;
-              default:
-                return NextResponse.json(
-                  { error: 'Invalid time off type' },
-                  { status: 400 }
-                );
-            }
-            
-            if (isNaN(availableDays) || availableDays < daysRequested) {
-              return NextResponse.json(
-                { error: `Not enough ${existingRequest.type.toLowerCase().replace('_', ' ')} days available. Available: ${availableDays}, Requested: ${daysRequested}` },
-                { status: 400 }
-              );
-            }
-            
-            const newBalance = availableDays - daysRequested;
-            
-            // Update using raw SQL with dynamic field name
-            await prisma.$executeRaw`
-              UPDATE "TimeOffBalance" 
-              SET "${updateField}" = ${newBalance}, "updatedAt" = NOW()
-              WHERE id = ${balance.id}
-            `;
-            
-            console.log(`Deducted ${daysRequested} ${existingRequest.type.toLowerCase().replace('_', ' ')} days from balance. New balance: ${newBalance}`);
-          }
-        } catch (error) {
-          console.error("Error updating balance:", error);
+
+        const balanceRow = db.prepare(`
+          SELECT * FROM time_off_balance
+          WHERE userId = ? AND year = ? AND type = ?
+        `).get(existingRequest.userId, currentYear, existingRequest.type) as {
+          remainingDays: number;
+          usedDays: number;
+        } | undefined;
+
+        if (!balanceRow || balanceRow.remainingDays < daysRequested) {
           return NextResponse.json(
-            { error: 'Failed to update time off balance' },
-            { status: 500 }
+            { error: `Not enough ${existingRequest.type.toLowerCase().replace('_', ' ')} days available. Available: ${balanceRow?.remainingDays ?? 0}, Requested: ${daysRequested}` },
+            { status: 400 }
           );
         }
+
+        db.prepare(`
+          UPDATE time_off_balance
+          SET remainingDays = remainingDays - ?, usedDays = usedDays + ?, updatedAt = CURRENT_TIMESTAMP
+          WHERE userId = ? AND year = ? AND type = ?
+        `).run(daysRequested, daysRequested, existingRequest.userId, currentYear, existingRequest.type);
+
+        console.log(`Deducted ${daysRequested} ${existingRequest.type} days from SQLite balance`);
       }
 
       // Update the request status
@@ -640,7 +506,7 @@ export async function PATCH(
       if (session.user.role === 'ADMIN' && existingRequest.status !== status) {
         // Get user details
         const userQuery = `SELECT * FROM users WHERE id = ?`;
-        const user = db.prepare(userQuery).get(existingRequest.user_id) as {
+        const user = db.prepare(userQuery).get(existingRequest.userId) as {
           id: string;
           email: string;
           name: string;
@@ -651,16 +517,16 @@ export async function PATCH(
             await sendTimeOffRequestApprovedEmail(
               user.email,
               user.name,
-              existingRequest.start_date,
-              existingRequest.end_date,
+              existingRequest.startDate,
+              existingRequest.endDate,
               existingRequest.type
             );
           } else if (status === 'REJECTED') {
             await sendTimeOffRequestRejectedEmail(
               user.email,
               user.name,
-              existingRequest.start_date,
-              existingRequest.end_date,
+              existingRequest.startDate,
+              existingRequest.endDate,
               existingRequest.type,
               body.reason || undefined
             );
@@ -713,45 +579,24 @@ export async function DELETE(
         return NextResponse.json({ error: 'Time off request not found' }, { status: 404 });
       }
 
-      // If the request was approved, we need to restore the balance
+      // If the request was approved, restore the balance
       if (timeOffRequest.status === 'APPROVED') {
         const currentYear = new Date().getFullYear();
-        const userBalance = await prisma?.timeOffBalance.findFirst({
+        const startDate = new Date(timeOffRequest.startDate);
+        const endDate = new Date(timeOffRequest.endDate);
+        const daysToRestore = calculateWorkingDays(startDate, endDate);
+
+        await prisma?.timeOffBalance.updateMany({
           where: {
             userId: timeOffRequest.userId,
-            year: currentYear
+            year: currentYear,
+            type: timeOffRequest.type
+          },
+          data: {
+            remainingDays: { increment: daysToRestore },
+            usedDays: { decrement: daysToRestore }
           }
         });
-
-        if (userBalance) {
-          // Calculate the number of days to restore
-          const startDate = new Date(timeOffRequest.startDate);
-          const endDate = new Date(timeOffRequest.endDate);
-          const daysToRestore = calculateWorkingDays(startDate, endDate);
-
-          // Restore the appropriate balance based on request type
-          if (timeOffRequest.type === 'VACATION') {
-            await prisma?.timeOffBalance.update({
-              where: { id: userBalance.id },
-              data: { vacationDays: userBalance.vacationDays + daysToRestore }
-            });
-          } else if (timeOffRequest.type === 'SICK') {
-            await prisma?.timeOffBalance.update({
-              where: { id: userBalance.id },
-              data: { sickDays: userBalance.sickDays + daysToRestore }
-            });
-          } else if (timeOffRequest.type === 'PAID_LEAVE') {
-            await prisma?.timeOffBalance.update({
-              where: { id: userBalance.id },
-              data: { paidLeave: userBalance.paidLeave + daysToRestore }
-            });
-          } else if (timeOffRequest.type === 'PERSONAL') {
-            await prisma?.timeOffBalance.update({
-              where: { id: userBalance.id },
-              data: { personalDays: userBalance.personalDays + daysToRestore }
-            });
-          }
-        }
       }
 
       // Delete the request
@@ -760,64 +605,36 @@ export async function DELETE(
       });
 
     } else if (db) {
-      // Get the request details first
       const timeOffRequest = db.prepare(`
-        SELECT * FROM time_off_requests 
-        WHERE id = ?
-      `).get(requestId);
+        SELECT * FROM time_off_requests WHERE id = ?
+      `).get(requestId) as {
+        id: string;
+        userId: string;
+        type: string;
+        startDate: string;
+        endDate: string;
+        status: string;
+      } | undefined;
 
       if (!timeOffRequest) {
         return NextResponse.json({ error: 'Time off request not found' }, { status: 404 });
       }
 
-      // If the request was approved, we need to restore the balance
+      // If the request was approved, restore the balance
       if (timeOffRequest.status === 'APPROVED') {
         const currentYear = new Date().getFullYear();
-        const userBalance = db.prepare(`
-          SELECT * FROM time_off_balances 
-          WHERE user_id = ? AND year = ?
-        `).get(timeOffRequest.user_id, currentYear);
+        const startDate = new Date(timeOffRequest.startDate);
+        const endDate = new Date(timeOffRequest.endDate);
+        const daysToRestore = calculateWorkingDays(startDate, endDate);
 
-        if (userBalance) {
-          // Calculate the number of days to restore
-          const startDate = new Date(timeOffRequest.start_date);
-          const endDate = new Date(timeOffRequest.end_date);
-          const daysToRestore = calculateWorkingDays(startDate, endDate);
-
-          // Restore the appropriate balance based on request type
-          if (timeOffRequest.type === 'VACATION') {
-            db.prepare(`
-              UPDATE time_off_balances 
-              SET vacation_days = vacation_days + ? 
-              WHERE id = ?
-            `).run(daysToRestore, userBalance.id);
-          } else if (timeOffRequest.type === 'SICK') {
-            db.prepare(`
-              UPDATE time_off_balances 
-              SET sick_days = sick_days + ? 
-              WHERE id = ?
-            `).run(daysToRestore, userBalance.id);
-          } else if (timeOffRequest.type === 'PAID_LEAVE') {
-            db.prepare(`
-              UPDATE time_off_balances 
-              SET paid_leave = paid_leave + ? 
-              WHERE id = ?
-            `).run(daysToRestore, userBalance.id);
-          } else if (timeOffRequest.type === 'PERSONAL') {
-            db.prepare(`
-              UPDATE time_off_balances 
-              SET personal_days = personal_days + ? 
-              WHERE id = ?
-            `).run(daysToRestore, userBalance.id);
-          }
-        }
+        db.prepare(`
+          UPDATE time_off_balance
+          SET remainingDays = remainingDays + ?, usedDays = MAX(0, usedDays - ?), updatedAt = CURRENT_TIMESTAMP
+          WHERE userId = ? AND year = ? AND type = ?
+        `).run(daysToRestore, daysToRestore, timeOffRequest.userId, currentYear, timeOffRequest.type);
       }
 
-      // Delete the request
-      db.prepare(`
-        DELETE FROM time_off_requests 
-        WHERE id = ?
-      `).run(requestId);
+      db.prepare(`DELETE FROM time_off_requests WHERE id = ?`).run(requestId);
     } else {
       throw new Error("No database connection available");
     }

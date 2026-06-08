@@ -86,25 +86,25 @@ export async function GET(request: Request) {
       console.log("Using SQLite to fetch time off requests");
       // Use SQLite in development
       let query = `
-        SELECT r.*, u.name as user_name, u.email as user_email 
+        SELECT r.*, u.name as user_name, u.email as user_email
         FROM time_off_requests r
-        JOIN users u ON r.user_id = u.id
-        WHERE (strftime('%Y', r.start_date) = ? OR strftime('%Y', r.end_date) = ?)
+        JOIN users u ON r.userId = u.id
+        WHERE (strftime('%Y', r.startDate) = ? OR strftime('%Y', r.endDate) = ?)
       `;
-      
+
       const params = [year.toString(), year.toString()];
-      
+
       if (status) {
         query += ` AND r.status = ?`;
         params.push(status);
       }
-      
+
       if (userId) {
-        query += ` AND r.user_id = ?`;
+        query += ` AND r.userId = ?`;
         params.push(userId);
       }
-      
-      query += ` ORDER BY r.start_date DESC`;
+
+      query += ` ORDER BY r.startDate DESC`;
       
       const requests = db.prepare(query).all(...params);
       

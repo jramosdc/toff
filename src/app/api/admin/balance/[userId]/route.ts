@@ -5,19 +5,6 @@ import db, { dbOperations, prisma, isPrismaEnabled } from '@/lib/db';
 import { AuditLogger } from '@/lib/audit';
 import { randomUUID } from 'crypto';
 
-// Define TimeOffBalance type for legacy SQLite
-interface LegacyTimeOffBalance {
-  id: string;
-  user_id: string;
-  vacation_days: number;
-  sick_days: number;
-  paid_leave: number;
-  personal_days: number;
-  year: number;
-  created_at?: string;
-  updated_at?: string;
-}
-
 // Define the response format for production (new schema) - this will work with Vercel
 interface ModernTimeOffBalance {
   id: string;
@@ -130,48 +117,50 @@ export async function GET(
       return NextResponse.json(response);
       
     } else if (db) {
-      console.log("Using SQLite to get user balance (legacy schema)");
-      // Use SQLite in development (legacy schema)
+      console.log("Using SQLite to get user balance");
       if (!dbOperations) {
         throw new Error("SQLite operations not available");
       }
 
-      const balance = dbOperations.getUserTimeOffBalance(userId, year) as LegacyTimeOffBalance | undefined;
+      const balanceRows = dbOperations.getAllUserTimeOffBalances(userId, year) as Array<{
+        type: string;
+        totalDays: number;
+        usedDays: number;
+        remainingDays: number;
+      }>;
 
-      if (!balance) {
-        // Create default balance if none exists
-        const balanceId = randomUUID();
-        const defaultBalance = {
-          id: balanceId,
-          userId: userId,
+      if (!balanceRows.length) {
+        const defaults = [
+          { type: 'VACATION', totalDays: 22 },
+          { type: 'SICK', totalDays: 8 },
+          { type: 'PAID_LEAVE', totalDays: 0 },
+          { type: 'PERSONAL', totalDays: 3 },
+        ];
+        for (const def of defaults) {
+          dbOperations.createTimeOffBalance.run(
+            randomUUID(), userId, year, def.type, def.totalDays, 0, def.totalDays
+          );
+        }
+        return NextResponse.json({
+          id: `${userId}-${year}`,
+          userId,
           vacationDays: 22,
           sickDays: 8,
           paidLeave: 0,
           personalDays: 3,
           year
-        };
-
-        dbOperations.createTimeOffBalance.run(
-          balanceId,
-          userId,
-          defaultBalance.vacationDays,
-          defaultBalance.sickDays,
-          defaultBalance.paidLeave,
-          defaultBalance.personalDays,
-          year
-        );
-
-        return NextResponse.json(defaultBalance);
+        });
       }
 
+      const byType = Object.fromEntries(balanceRows.map(b => [b.type, b.totalDays]));
       return NextResponse.json({
-        id: balance.id,
-        userId: balance.user_id,
-        vacationDays: balance.vacation_days,
-        sickDays: balance.sick_days,
-        paidLeave: balance.paid_leave,
-        personalDays: balance.personal_days,
-        year: balance.year
+        id: `${userId}-${year}`,
+        userId,
+        vacationDays: byType['VACATION'] ?? 22,
+        sickDays: byType['SICK'] ?? 8,
+        paidLeave: byType['PAID_LEAVE'] ?? 0,
+        personalDays: byType['PERSONAL'] ?? 3,
+        year
       });
     } else {
       throw new Error("No database connection available");
@@ -291,58 +280,42 @@ export async function PUT(
       return NextResponse.json(updatedBalance);
       
     } else if (db) {
-      console.log("Using SQLite to update user balance (legacy schema)");
-      
+      console.log("Using SQLite to update user balance");
+
       if (!dbOperations) {
         throw new Error("SQLite operations not available");
       }
-      
-      // Check if balance exists first
-      const existingBalance = dbOperations.getUserTimeOffBalance(userId, currentYear) as LegacyTimeOffBalance | undefined;
-      
-      if (existingBalance) {
-        // Update existing balance - use the existing ID
+
+      const types: Array<[string, number]> = [
+        ['VACATION', vacationDays],
+        ['SICK', sickDays],
+        ['PAID_LEAVE', paidLeave],
+        ['PERSONAL', personalDays],
+      ];
+
+      for (const [type, totalDays] of types) {
+        const existing = dbOperations.getUserTimeOffBalance(userId, currentYear, type) as { usedDays: number } | undefined;
+        const usedDays = existing?.usedDays ?? 0;
         dbOperations.createOrUpdateTimeOffBalance(
-          existingBalance.id, // Use existing ID, not a new one
+          randomUUID(),
           userId,
-          vacationDays,
-          sickDays,
-          paidLeave,
-          personalDays,
-          currentYear
-        );
-      } else {
-        // Create new balance - generate new ID only for new records
-        const balanceId = randomUUID();
-        dbOperations.createOrUpdateTimeOffBalance(
-          balanceId,
-          userId,
-          vacationDays,
-          sickDays,
-          paidLeave,
-          personalDays,
-          currentYear
+          currentYear,
+          type,
+          totalDays,
+          usedDays,
+          totalDays - usedDays
         );
       }
 
-      // Get the updated balance
-      const sqliteBalance = dbOperations.getUserTimeOffBalance(userId, currentYear) as LegacyTimeOffBalance;
-
-      if (!sqliteBalance) {
-        return NextResponse.json({ error: 'Failed to update balance' }, { status: 500 });
-      }
-
-      const updatedBalance = {
-        id: sqliteBalance.id,
-        userId: sqliteBalance.user_id,
-        vacationDays: sqliteBalance.vacation_days,
-        sickDays: sqliteBalance.sick_days,
-        paidLeave: sqliteBalance.paid_leave,
-        personalDays: sqliteBalance.personal_days,
-        year: sqliteBalance.year
-      };
-      
-      return NextResponse.json(updatedBalance);
+      return NextResponse.json({
+        id: `${userId}-${currentYear}`,
+        userId,
+        vacationDays,
+        sickDays,
+        paidLeave,
+        personalDays,
+        year: currentYear
+      });
     } else {
       throw new Error("No database connection available");
     }
