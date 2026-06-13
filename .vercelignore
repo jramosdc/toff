@@ -1,0 +1,3 @@
+# The even-wmata/ folder is a standalone Even Realities glasses app, not part
+# of the Toff (Next.js) deployment. Exclude it from Toff's Vercel build context.
+even-wmata/

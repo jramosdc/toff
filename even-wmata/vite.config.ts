@@ -19,7 +19,6 @@ export default defineConfig({
     },
   },
   build: { target: 'esnext' },
-  // This app lives inside a larger repo; pin an empty PostCSS config so Vite
-  // doesn't walk up and pick up the parent project's Tailwind setup.
+  // Pin an empty PostCSS config so Vite never walks up the tree looking for one.
   css: { postcss: {} },
 })
