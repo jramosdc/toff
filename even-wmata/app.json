@@ -1,0 +1,21 @@
+{
+  "package_id": "com.efe.metroboard",
+  "edition": "202601",
+  "name": "DC Metro Board",
+  "version": "0.1.0",
+  "min_app_version": "2.0.0",
+  "min_sdk_version": "0.0.10",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "location",
+      "desc": "Finds the Metro station closest to you to show its next-train board."
+    },
+    {
+      "name": "network",
+      "desc": "Fetches live WMATA train predictions.",
+      "whitelist": ["https://wmata-proxy.example.workers.dev"]
+    }
+  ],
+  "supported_languages": ["en"]
+}
