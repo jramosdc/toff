@@ -315,32 +315,53 @@ export async function POST(req: NextRequest) {
       throw new Error("No database connection available");
     }
     
-    // Try to send email notification to admin(s) only, not to the employee
+    // Try to send email notification
     try {
-      // Send notification to admin(s)
       if (process.env.VERCEL || isPrismaEnabled) {
-        // Get admin users with Prisma
-        const adminUsers = await prisma?.user.findMany({
-          where: { role: 'ADMIN' }
+        // Fetch full user details to check for supervisor
+        const userDetails = await prisma?.user.findUnique({
+          where: { id: effectiveUserId },
+          include: { supervisor: true }
         });
+
+        const supervisorEmail = userDetails?.supervisor?.email;
         
-        debug(`Found ${adminUsers?.length || 0} admin users to notify`);
-        
-        for (const admin of adminUsers || []) {
-          if (admin.email && typeof sendTimeOffRequestAdminNotification === 'function') {
-            try {
-              await sendTimeOffRequestAdminNotification(
-                admin.email,
-                userName,
-                validatedData.startDate,
-                validatedData.endDate,
-                validatedData.type,
-                id,
-                validatedData.reason
-              );
-              debug("Sent admin notification to:", admin.email);
-            } catch (emailError) {
-              console.error(`Failed to send email to admin ${admin.email}:`, emailError);
+        if (supervisorEmail && typeof sendTimeOffRequestAdminNotification === 'function') {
+          // Send to supervisor
+          debug(`Sending notification to supervisor: ${supervisorEmail}`);
+          await sendTimeOffRequestAdminNotification(
+            supervisorEmail,
+            userName,
+            validatedData.startDate,
+            validatedData.endDate,
+            validatedData.type,
+            id,
+            validatedData.reason
+          );
+        } else {
+          // Fallback: Send to all admins
+          const adminUsers = await prisma?.user.findMany({
+            where: { role: 'ADMIN' }
+          });
+          
+          debug(`Found ${adminUsers?.length || 0} admin users to notify`);
+          
+          for (const admin of adminUsers || []) {
+            if (admin.email && typeof sendTimeOffRequestAdminNotification === 'function') {
+              try {
+                await sendTimeOffRequestAdminNotification(
+                  admin.email,
+                  userName,
+                  validatedData.startDate,
+                  validatedData.endDate,
+                  validatedData.type,
+                  id,
+                  validatedData.reason
+                );
+                debug("Sent admin notification to:", admin.email);
+              } catch (emailError) {
+                console.error(`Failed to send email to admin ${admin.email}:`, emailError);
+              }
             }
           }
         }

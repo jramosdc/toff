@@ -10,6 +10,8 @@ interface User {
   name: string;
   email: string;
   role: string;
+  supervisorId?: string;
+  supervisorName?: string;
 }
 
 interface TimeOffRequest {
@@ -83,6 +85,7 @@ export default function EmployeePage({ params }: PageProps) {
   const [requests, setRequests] = useState<TimeOffRequest[]>([]);
   const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]);
   const [auditLogs, setAuditLogs] = useState<Array<{ id: string; action: string; entityType: string; entityId: string; details: any; createdAt: string }>>([]);
+  const [potentialSupervisors, setPotentialSupervisors] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -151,11 +154,40 @@ export default function EmployeePage({ params }: PageProps) {
         const logs = await auditRes.json();
         setAuditLogs(logs);
       }
+
+      // Fetch potential supervisors (all users for now, can filter by role if needed)
+      const usersRes = await fetch('/api/admin/users');
+      if (usersRes.ok) {
+        const data = await usersRes.json();
+        const users = data.users || data;
+        // Filter out the current user (cannot be own supervisor)
+        setPotentialSupervisors(users.filter((u: User) => u.id !== userId));
+      }
     } catch (err) {
       setError('An error occurred while fetching data');
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveUser = async (updatedData: Partial<User>) => {
+    if (!user) return;
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...user, ...updatedData }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to update user');
+      
+      const updatedUser = await response.json();
+      setUser(updatedUser);
+      setSuccess('User updated successfully');
+    } catch (e) {
+      setError('Failed to update user');
+      console.error(e);
     }
   };
 
@@ -290,6 +322,49 @@ export default function EmployeePage({ params }: PageProps) {
             >
               Back to Admin
             </button>
+          </div>
+        </div>
+
+        {/* User Details & Supervisor Assignment */}
+        <div className="bg-white shadow rounded-lg mb-8">
+          <div className="px-4 py-5 sm:p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">User Details</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Role</label>
+                <div className="mt-1 flex items-center">
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    user?.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+                  }`}>
+                    {user?.role}
+                  </span>
+                  <select 
+                    value={user?.role || 'EMPLOYEE'}
+                    onChange={(e) => saveUser({ role: e.target.value })}
+                    className="ml-4 block w-40 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                  >
+                    <option value="EMPLOYEE">Employee</option>
+                    <option value="MANAGER">Manager</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Supervisor</label>
+                <select
+                  value={user?.supervisorId || ''}
+                  onChange={(e) => saveUser({ supervisorId: e.target.value || undefined })}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                >
+                  <option value="">No Supervisor</option>
+                  {potentialSupervisors.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.email})</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">The supervisor receives notification emails for this user's requests.</p>
+              </div>
+            </div>
           </div>
         </div>
 

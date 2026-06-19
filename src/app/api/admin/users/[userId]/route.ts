@@ -39,7 +39,11 @@ export async function GET(
           id: true,
           name: true,
           email: true,
-          role: true
+          role: true,
+          supervisorId: true,
+          supervisor: {
+            select: { id: true, name: true }
+          }
         }
       });
     } else if (db && dbOperations.getUserById) {
@@ -57,13 +61,61 @@ export async function GET(
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      supervisorId: (user as any).supervisorId,
+      supervisorName: (user as any).supervisor?.name
     });
   } catch (error) {
     console.error('Error fetching user:', error);
     return NextResponse.json({ error: `Failed to fetch user: ${error}` }, { status: 500 });
   }
 } 
+
+export async function PUT(
+  request: Request,
+  { params }: { params: { userId: string } }
+) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const userId = params.userId;
+
+  try {
+    const data = await request.json();
+    const { name, email, role, supervisorId } = data;
+
+    if (process.env.VERCEL || (isPrismaEnabled && prisma)) {
+      // Check if user exists
+      const existingUser = await prisma!.user.findUnique({ where: { id: userId } });
+      if (!existingUser) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      // Update user
+      const updatedUser = await prisma!.user.update({
+        where: { id: userId },
+        data: {
+          name,
+          email,
+          role,
+          supervisorId: supervisorId || null, // Handle removal of supervisor
+        },
+      });
+
+      return NextResponse.json(updatedUser);
+    } 
+    
+    // SQLite fallback not fully implemented for supervisor relation
+    return NextResponse.json({ error: 'Database not supported for this operation in current environment' }, { status: 501 });
+
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
+  }
+}
 
 export async function DELETE(
   request: Request,
